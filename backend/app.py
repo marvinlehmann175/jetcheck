@@ -16,6 +16,9 @@ TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")
 # CORS config: either allow all via ALLOWED_ORIGIN="*" or specific list via ALLOWED_ORIGINS
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 ALLOWED_ORIGINS = [o.strip().rstrip('/') for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+# If ALLOWED_ORIGIN is set and not "*", ensure it's included in ALLOWED_ORIGINS list
+if ALLOWED_ORIGIN != "*" and ALLOWED_ORIGIN not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(ALLOWED_ORIGIN)
 ALLOW_ALL = ALLOWED_ORIGIN == "*"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
