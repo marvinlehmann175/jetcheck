@@ -76,8 +76,8 @@ def get_globeair():
         resp = (
             supabase
             .table(TABLE)
-            .select("route,date,time,price,link,probability,id")
-            .order("id", desc=True)
+            .select("id,route,date,time,price,link")
+            .order("id", desc=True)   # optional: wenn id existiert (tut sie)
             .execute()
         )
         data = resp.data or []
