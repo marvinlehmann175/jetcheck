@@ -15,5 +15,16 @@ def get_asl():
         data = json.load(f)
     return jsonify(data)
 
+@app.route("/")
+def index():
+    return """
+    <h1>JetCheck API</h1>
+    <p>Welcome! The API is running.</p>
+    <ul>
+        <li><a href='/api/globeair'>/api/globeair</a></li>
+        <li><a href='/api/asl'>/api/asl</a></li>
+    </ul>
+    """
+
 if __name__ == "__main__":
     app.run(debug=True)
