@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata = {
   title: "JetCheck",
-  description: "Empty legs – exklusiv & schnell",
+  description: "Exklusive Leerflüge in Echtzeit",
   icons: {
     icon: [
       { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
