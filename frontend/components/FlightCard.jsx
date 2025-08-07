@@ -1,46 +1,29 @@
 "use client";
-import React from "react";
 
 export default function FlightCard({ flight }) {
-  const { route, date, time, price, link, source } = flight;
-
-  const [dep, arr] = (route || "").split("→").map((s) => s?.trim());
-  const prettyPrice = price || "—";
+  const { route, date, time, price, link, source, discount, aircraft } = flight || {};
 
   return (
     <article className="card">
-      {source && <div className={`source-badge source-${source.toLowerCase()}`}>{source}</div>}
-
-      <div className="card__row">
-        <div className="chip chip--from" title={dep}>{dep || "—"}</div>
-        <div className="arrow">→</div>
-        <div className="chip chip--to" title={arr}>{arr || "—"}</div>
+      <div className="card__head">
+        <span className="badge">{source || "Unknown"}</span>
+        {discount ? <span className="badge badge--deal">-{discount}%</span> : null}
       </div>
 
-      <div className="card__meta">
-        <div className="meta">
-          <span className="meta__label">Datum</span>
-          <span className="meta__value">{date || "—"}</span>
-        </div>
-        <div className="meta">
-          <span className="meta__label">Zeit</span>
-          <span className="meta__value">{time || "—"}</span>
-        </div>
-        <div className="meta">
-          <span className="meta__label">Preis</span>
-          <span className="meta__value">{prettyPrice}</span>
-        </div>
+      <h3 className="route">{route || "–"}</h3>
+
+      <div className="meta">
+        <div>{date || "n/a"}</div>
+        <div>{time || ""}</div>
+        {aircraft ? <div>{aircraft}</div> : null}
+        {price ? <div className="price">{price}</div> : null}
       </div>
 
-      <div className="card__cta">
-        {link ? (
-          <a className="btn btn--primary" href={link} target="_blank" rel="noopener noreferrer">
-            Buchen
-          </a>
-        ) : (
-          <button className="btn btn--disabled" disabled>Details</button>
-        )}
-      </div>
+      {link ? (
+        <a className="btn btn--primary" href={link} target="_blank" rel="noreferrer">
+          Buchen / Details
+        </a>
+      ) : null}
     </article>
   );
 }

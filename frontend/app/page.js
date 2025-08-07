@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import FlightCard from "@/components/FlightCard";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "https://jetcheck.onrender.com";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "https://jetcheck.onrender.com";
 
 export default function Home() {
   const [globeair, setGlobeair] = useState([]);
@@ -25,17 +26,24 @@ export default function Home() {
   const pageSize = 12;
 
   useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       try {
         const [gaRes, aslRes] = await Promise.allSettled([
           fetch(`${API_BASE}/api/globeair`, { cache: "no-store" }),
           fetch(`${API_BASE}/api/asl`, { cache: "no-store" }),
         ]);
+        if (cancelled) return;
 
         if (gaRes.status === "fulfilled") {
           const data = await gaRes.value.json();
-          // Source kennzeichnen
-          setGlobeair((Array.isArray(data) ? data : []).map(d => ({ ...d, source: "GlobeAir" })));
+          setGlobeair(
+            (Array.isArray(data) ? data : []).map((d) => ({
+              ...d,
+              source: "GlobeAir",
+            }))
+          );
         } else {
           console.error("GlobeAir fetch error:", gaRes.reason);
           setError("Fehler beim Laden der GlobeAir-Daten.");
@@ -43,7 +51,12 @@ export default function Home() {
 
         if (aslRes.status === "fulfilled") {
           const data = await aslRes.value.json();
-          setAsl((Array.isArray(data) ? data : []).map(d => ({ ...d, source: "ASL" })));
+          setAsl(
+            (Array.isArray(data) ? data : []).map((d) => ({
+              ...d,
+              source: "ASL",
+            }))
+          );
         } else {
           console.error("ASL fetch error:", aslRes.reason);
         }
@@ -51,10 +64,14 @@ export default function Home() {
         console.error(e);
         setError("Unerwarteter Fehler beim Laden der Daten.");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const rawFlights = useMemo(() => {
@@ -64,7 +81,10 @@ export default function Home() {
 
   const priceToNumber = (price) => {
     if (!price) return Number.POSITIVE_INFINITY;
-    const cleaned = String(price).replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".");
+    const cleaned = String(price)
+      .replace(/[^\d.,]/g, "")
+      .replace(/\./g, "")
+      .replace(",", ".");
     const num = Number.parseFloat(cleaned);
     return Number.isNaN(num) ? Number.POSITIVE_INFINITY : num;
     // Optional: wenn "Book for €990" kommt, wird oben automatisch 990 erkannt
@@ -78,7 +98,9 @@ export default function Home() {
 
     return (rawFlights || []).filter((f) => {
       const route = (f.route || "").toLowerCase();
-      const [dep, arr] = (f.route || "").split("→").map((s) => s?.trim().toLowerCase());
+      const [dep, arr] = (f.route || "")
+        .split("→")
+        .map((s) => s?.trim().toLowerCase());
       const d = (f.date || "").trim();
 
       if (qLower && !route.includes(qLower)) return false;
@@ -105,13 +127,13 @@ export default function Home() {
           B = priceToNumber(b.price);
           break;
         case "time":
-          A = (a.time || "");
-          B = (b.time || "");
+          A = a.time || "";
+          B = b.time || "";
           break;
         case "date":
         default:
-          A = (a.date || "");
-          B = (b.date || "");
+          A = a.date || "";
+          B = b.date || "";
           break;
       }
       if (A < B) return sortDir === "asc" ? -1 : 1;
@@ -130,7 +152,9 @@ export default function Home() {
     return sorted.slice(start, start + pageSizeClamped);
   }, [sorted, currentPage]);
 
-  useEffect(() => { setPage(1); }, [q, from, to, date, maxPrice, sortKey, sortDir]);
+  useEffect(() => {
+    setPage(1);
+  }, [q, from, to, date, maxPrice, sortKey, sortDir]);
 
   return (
     <main className="screen">
@@ -181,12 +205,20 @@ export default function Home() {
         />
 
         <div className="selects">
-          <select className="select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+          <select
+            className="select"
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value)}
+          >
             <option value="date">Datum</option>
             <option value="time">Zeit</option>
             <option value="price">Preis</option>
           </select>
-          <select className="select" value={sortDir} onChange={(e) => setSortDir(e.target.value)}>
+          <select
+            className="select"
+            value={sortDir}
+            onChange={(e) => setSortDir(e.target.value)}
+          >
             <option value="asc">Aufsteigend</option>
             <option value="desc">Absteigend</option>
           </select>
@@ -202,17 +234,24 @@ export default function Home() {
           </div>
         )}
 
-        {!loading && error && <div className="notice notice--error">{error}</div>}
+        {!loading && error && (
+          <div className="notice notice--error">{error}</div>
+        )}
 
         {!loading && !error && (
           <>
             {sorted.length === 0 ? (
-              <div className="notice">Keine Flüge für die aktuelle Filterung.</div>
+              <div className="notice">
+                Keine Flüge für die aktuelle Filterung.
+              </div>
             ) : (
               <>
                 <div className="grid">
                   {pageItems.map((f) => (
-                    <FlightCard key={f.id || `${f.route}-${f.time}-${f.price}`} flight={f} />
+                    <FlightCard
+                      key={f.id || `${f.route}-${f.time}-${f.price}`}
+                      flight={f}
+                    />
                   ))}
                 </div>
 
@@ -244,7 +283,11 @@ export default function Home() {
       <footer className="footer">
         <span>© {new Date().getFullYear()} JetCheck</span>
         <span className="sep">•</span>
-        <a href="https://jetcheck-eight.vercel.app" target="_blank" rel="noreferrer">
+        <a
+          href="https://jetcheck-eight.vercel.app"
+          target="_blank"
+          rel="noreferrer"
+        >
           Live
         </a>
       </footer>
