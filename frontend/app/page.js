@@ -170,14 +170,17 @@ export default function Home() {
         <p>Finde verfügbare Empty Legs mit nur einem Klick.</p>
       </section>
 
+      <section className="searchbar">
+        <input
+          className="searchbar__input"
+          placeholder="Suche Route… (z. B. Ibiza oder ZRH)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </section>
+
       {/* Controls */}
       <section className="controls">
-        <input
-          className="input"
-          placeholder="Suche Route… (z. B. Ibiza oder ZRH)"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
         <input
           className="input"
           placeholder="Abflug (z. B. IBZ)"
