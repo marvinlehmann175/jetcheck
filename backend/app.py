@@ -1,13 +1,20 @@
+import os
+from dotenv import load_dotenv
+from supabase import create_client
 from flask import Flask, jsonify
 import json
 
 app = Flask(__name__)
 
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 @app.route("/api/globeair")
 def get_globeair():
-    with open("flights.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return jsonify(data)
+    response = supabase.table("globeair_flights").select("*").execute()
+    return jsonify(response.data)
 
 @app.route("/api/asl")
 def get_asl():

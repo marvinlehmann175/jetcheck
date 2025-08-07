@@ -1,6 +1,14 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import json
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+load_dotenv()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 URL = "https://www.globeair.com/empty-leg-flights"
 HEADERS = {
@@ -43,9 +51,9 @@ def scrape_globeair():
             "link": link
         })
 
-    # Speichern als JSON
-    with open("flights.json", "w", encoding="utf-8") as f:
-        json.dump(flights, f, ensure_ascii=False, indent=2)
+    # In Supabase speichern (bestehende vorher löschen)
+    supabase.table("globeair_flights").delete().neq("id", 0).execute()
+    supabase.table("globeair_flights").insert(flights).execute()
 
     print(f"✅ {len(flights)} Flüge gespeichert.")
 
