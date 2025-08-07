@@ -6,7 +6,7 @@ export default function Home() {
   const [flights, setFlights] = useState([]);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/globeair")
+    fetch("https://jetcheck.onrender.com/api/globeair")
       .then((res) => res.json())
       .then(setFlights);
   }, []);
