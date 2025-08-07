@@ -1,61 +1,81 @@
 import os
-import requests
-from bs4 import BeautifulSoup
-import json
-from supabase import create_client, Client
+import sys
+from flask import Flask, jsonify, Response
 from dotenv import load_dotenv
+from supabase import create_client, Client
 
+# Load local .env when running locally; on Render environment vars are provided by the dashboard
 load_dotenv()
+
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")
+ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")  # e.g. https://jetcheck-eight.vercel.app
 
-URL = "https://www.globeair.com/empty-leg-flights"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ Missing SUPABASE_URL or SUPABASE_KEY in environment.", file=sys.stderr)
 
-def scrape_globeair():
-    response = requests.get(URL, headers=HEADERS)
-    soup = BeautifulSoup(response.text, "html.parser")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABASE_KEY else None
 
-    flights = []
+app = Flask(__name__)
 
-    for column in soup.select("div.column"):
-        # Route
-        caption = column.select_one("h3.caption")
-        if not caption:
-            continue
-        route = caption.get_text(strip=True).replace("\n", "")
+# Minimal CORS without extra deps; adjust ALLOWED_ORIGIN in env for production
+@app.after_request
+def add_cors_headers(resp: Response):
+    resp.headers["Access-Control-Allow-Origin"] = ALLOWED_ORIGIN
+    resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return resp
 
-        # Details (Datum, Uhrzeit etc.)
-        details_block = column.select_one("p.flightdata")
-        if not details_block:
-            continue
-        details_lines = [line.strip() for line in details_block.stripped_strings]
-        if len(details_lines) < 3:
-            continue
-        date = details_lines[0]
-        time = details_lines[1]
-        price_line = details_lines[2]
 
-        # Buchungslink
-        book_button = column.select_one("a.button")
-        link = book_button["href"] if book_button else None
+@app.route("/")
+def index():
+    return (
+        "JetCheck API\n\n"
+        "Welcome! The API is running.\n\n"
+        "/api/globeair\n"
+        "/api/asl\n"
+    ), 200, {"Content-Type": "text/plain; charset=utf-8"}
 
-        flights.append({
-            "route": route,
-            "date": date,
-            "time": time,
-            "price": price_line,
-            "link": link
-        })
 
-    # In Supabase speichern (bestehende vorher löschen)
-    supabase.table("globeair_flights").delete().neq("id", 0).execute()
-    supabase.table("globeair_flights").insert(flights).execute()
+@app.route("/healthz")
+def healthz():
+    return jsonify({"status": "ok"})
 
-    print(f"✅ {len(flights)} Flüge gespeichert.")
+
+@app.route("/api/globeair")
+def get_globeair():
+    if supabase is None:
+        return jsonify({"error": "Supabase client not configured"}), 500
+
+    try:
+        # Select common fields and order by newest id first
+        resp = (
+            supabase
+            .table(TABLE)
+            .select("route,date,time,price,link,probability,id")
+            .order("id", desc=True)
+            .execute()
+        )
+        data = resp.data or []
+        return jsonify(data)
+    except Exception as e:
+        print(f"❌ /api/globeair error: {e}", file=sys.stderr)
+        return jsonify({"error": "Failed to fetch flights"}), 500
+
+
+@app.route("/api/asl")
+def get_asl():
+    # Keep compatibility: serve static JSON if present; otherwise empty list
+    path = os.path.join(os.path.dirname(__file__), "flights_asl.json")
+    if os.path.exists(path):
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    return jsonify([])
+
 
 if __name__ == "__main__":
-    scrape_globeair()
+    # Useful for local testing
+    port = int(os.getenv("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
