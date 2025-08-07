@@ -3,36 +3,51 @@ from bs4 import BeautifulSoup
 import json
 
 URL = "https://www.globeair.com/empty-leg-flights"
-response = requests.get(URL)
-soup = BeautifulSoup(response.text, "html.parser")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-flights = []
+def scrape_globeair():
+    response = requests.get(URL, headers=HEADERS)
+    soup = BeautifulSoup(response.text, "html.parser")
 
-columns = soup.select("div.columns > div.column")
-for col in columns:
-    try:
-        route_tag = col.find("h3", class_="caption")
-        route = route_tag.get_text(strip=True) if route_tag else "–"
+    flights = []
 
-        details_tag = col.find("p", class_="flightdata")
-        details_lines = details_tag.decode_contents().split("<br>") if details_tag else []
-        date = details_lines[0].strip() if len(details_lines) > 0 else "–"
-        time = details_lines[1].strip() if len(details_lines) > 1 else "–"
-        price_tag = BeautifulSoup(details_lines[3], "html.parser").get_text(strip=True) if len(details_lines) > 3 else "–"
-        
-        book_link_tag = col.find("a", class_="button")
-        link = book_link_tag["href"] if book_link_tag else None
+    for column in soup.select("div.column"):
+        # Route
+        caption = column.select_one("h3.caption")
+        if not caption:
+            continue
+        route = caption.get_text(strip=True).replace("\n", "")
+
+        # Details (Datum, Uhrzeit etc.)
+        details_block = column.select_one("p.flightdata")
+        if not details_block:
+            continue
+        details_lines = [line.strip() for line in details_block.stripped_strings]
+        if len(details_lines) < 3:
+            continue
+        date = details_lines[0]
+        time = details_lines[1]
+        price_line = details_lines[2]
+
+        # Buchungslink
+        book_button = column.select_one("a.button")
+        link = book_button["href"] if book_button else None
 
         flights.append({
             "route": route,
             "date": date,
             "time": time,
-            "price": price_tag,
+            "price": price_line,
             "link": link
         })
-    except Exception as e:
-        print("Fehler beim Parsen eines Elements:", e)
 
-# Save to JSON
-with open("flights.json", "w", encoding="utf-8") as f:
-    json.dump(flights, f, indent=2, ensure_ascii=False)
+    # Speichern als JSON
+    with open("flights.json", "w", encoding="utf-8") as f:
+        json.dump(flights, f, ensure_ascii=False, indent=2)
+
+    print(f"✅ {len(flights)} Flüge gespeichert.")
+
+if __name__ == "__main__":
+    scrape_globeair()
