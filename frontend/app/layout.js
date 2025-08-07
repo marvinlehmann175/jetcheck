@@ -8,14 +8,7 @@ export const metadata = {
     index: false,
     follow: false,
     nocache: true,
-    googleBot: {
-      index: false,
-      follow: false,
-      noimageindex: true,
-      "max-video-preview": -1,
-      "max-image-preview": "none",
-      "max-snippet": -1,
-    },
+    googleBot: { index: false, follow: false, noimageindex: true }
   },
   icons: {
     icon: [
@@ -24,11 +17,13 @@ export const metadata = {
       { url: "/favicon.ico", sizes: "any" }
     ],
     apple: "/apple-touch-icon.png",
-    other: [
-      { rel: "manifest", url: "/site.webmanifest" }
-    ]
-  },
-  themeColor: "#0b0c10" // optional für Mobile Browser UI
+    other: [{ rel: "manifest", url: "/site.webmanifest" }]
+  }
+};
+
+// ✅ Put themeColor here
+export const viewport = {
+  themeColor: "#0b0c10",
 };
 
 export default function RootLayout({ children }) {
