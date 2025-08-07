@@ -9,19 +9,16 @@ export default function Home() {
   const [globeair, setGlobeair] = useState([]);
   const [asl, setAsl] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("globeair"); // "globeair" | "asl"
   const [error, setError] = useState("");
 
-  // UI State: Suche/Filter
-  const [q, setQ] = useState("");             // Freitext (Route)
-  const [from, setFrom] = useState("");       // Abflug (IATA oder Stadt)
-  const [to, setTo] = useState("");           // Ziel
-  const [date, setDate] = useState("");       // exaktes Datum (Stringvergleich)
-  const [maxPrice, setMaxPrice] = useState(""); // z.B. 1500
-
-  // Sortierung
-  const [sortKey, setSortKey] = useState("date");  // date | time | price
-  const [sortDir, setSortDir] = useState("asc");   // asc | desc
+  // Suche/Filter & Sortierung (lassen wir drin)
+  const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [date, setDate] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortKey, setSortKey] = useState("date");
+  const [sortDir, setSortDir] = useState("asc");
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -37,7 +34,8 @@ export default function Home() {
 
         if (gaRes.status === "fulfilled") {
           const data = await gaRes.value.json();
-          setGlobeair(Array.isArray(data) ? data : []);
+          // Source kennzeichnen
+          setGlobeair((Array.isArray(data) ? data : []).map(d => ({ ...d, source: "GlobeAir" })));
         } else {
           console.error("GlobeAir fetch error:", gaRes.reason);
           setError("Fehler beim Laden der GlobeAir-Daten.");
@@ -45,7 +43,7 @@ export default function Home() {
 
         if (aslRes.status === "fulfilled") {
           const data = await aslRes.value.json();
-          setAsl(Array.isArray(data) ? data : []);
+          setAsl((Array.isArray(data) ? data : []).map(d => ({ ...d, source: "ASL" })));
         } else {
           console.error("ASL fetch error:", aslRes.reason);
         }
@@ -59,18 +57,19 @@ export default function Home() {
     load();
   }, []);
 
-  // Aktive Liste nach Tab
-  const rawFlights = tab === "globeair" ? globeair : asl;
+  const rawFlights = useMemo(() => {
+    // Beide Quellen in eine Liste
+    return [...globeair, ...asl];
+  }, [globeair, asl]);
 
-  // Helper: Preis als Zahl extrahieren (z. B. "€1,290" -> 1290)
   const priceToNumber = (price) => {
     if (!price) return Number.POSITIVE_INFINITY;
     const cleaned = String(price).replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", ".");
     const num = Number.parseFloat(cleaned);
     return Number.isNaN(num) ? Number.POSITIVE_INFINITY : num;
+    // Optional: wenn "Book for €990" kommt, wird oben automatisch 990 erkannt
   };
 
-  // Filter + Suche
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     const fromLower = from.trim().toLowerCase();
@@ -82,19 +81,11 @@ export default function Home() {
       const [dep, arr] = (f.route || "").split("→").map((s) => s?.trim().toLowerCase());
       const d = (f.date || "").trim();
 
-      // Freitext in Route
       if (qLower && !route.includes(qLower)) return false;
-
-      // Abflug-Stichwort
       if (fromLower && !(dep || "").includes(fromLower)) return false;
-
-      // Ziel-Stichwort
       if (toLower && !(arr || "").includes(toLower)) return false;
-
-      // Exaktes Datum (string match; später gerne auf ISO-Datum umstellen)
       if (dateNorm && d !== dateNorm) return false;
 
-      // Preislimit
       if (maxPrice) {
         const max = Number(maxPrice);
         if (!Number.isNaN(max) && priceToNumber(f.price) > max) return false;
@@ -104,7 +95,6 @@ export default function Home() {
     });
   }, [rawFlights, q, from, to, date, maxPrice]);
 
-  // Sortierung
   const sorted = useMemo(() => {
     const arr = [...filtered];
     arr.sort((a, b) => {
@@ -131,19 +121,16 @@ export default function Home() {
     return arr;
   }, [filtered, sortKey, sortDir]);
 
-  // Pagination
   const total = sorted.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const pageSizeClamped = pageSize;
+  const totalPages = Math.max(1, Math.ceil(total / pageSizeClamped));
   const currentPage = Math.min(page, totalPages);
   const pageItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return sorted.slice(start, start + pageSize);
+    const start = (currentPage - 1) * pageSizeClamped;
+    return sorted.slice(start, start + pageSizeClamped);
   }, [sorted, currentPage]);
 
-  // Reset auf Seite 1, wenn Filter/Tab wechseln
-  useEffect(() => {
-    setPage(1);
-  }, [tab, q, from, to, date, maxPrice, sortKey, sortDir]);
+  useEffect(() => { setPage(1); }, [q, from, to, date, maxPrice, sortKey, sortDir]);
 
   return (
     <main className="screen">
@@ -152,20 +139,6 @@ export default function Home() {
           <span className="dot" />
           <span className="logo">JetCheck</span>
         </div>
-        <nav className="tabs">
-          <button
-            className={`tab ${tab === "globeair" ? "is-active" : ""}`}
-            onClick={() => setTab("globeair")}
-          >
-            ✈️ GlobeAir
-          </button>
-          <button
-            className={`tab ${tab === "asl" ? "is-active" : ""}`}
-            onClick={() => setTab("asl")}
-          >
-            🛩 ASL
-          </button>
-        </nav>
       </header>
 
       <section className="hero">
@@ -243,7 +216,6 @@ export default function Home() {
                   ))}
                 </div>
 
-                {/* Pagination */}
                 <div className="pager">
                   <button
                     className="btn"
