@@ -54,6 +54,7 @@ class EaviationProvider(Provider):
 
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(EAVIATION_URL, referer="https://www.e-aviation.de/")
+        print(html[:2000])
         if self.debug:
             save_debug("eaviation.html", html)
 
