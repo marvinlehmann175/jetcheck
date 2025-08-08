@@ -1,106 +1,147 @@
 "use client";
 
-const airportNames = {
-  'IBZ': 'Ibiza',
-  'ZRH': 'Zürich',
-  'AMS': 'Amsterdam',
-  'FRA': 'Frankfurt',
-  'LHR': 'London Heathrow',
-  // weitere Codes nach Bedarf
-};
-
-function splitRoute(route = "") {
-  // akzeptiert "IBZ → ZRH" oder "Ibiza → Zürich"
-  const parts = route.split(/→|->|-/).map(s => s.trim());
-  const [fromRaw = "", toRaw = ""] = parts;
-  const code = s => (s.match(/^[A-Za-z]{3}$/) ? s.toUpperCase() : null);
-
-  return {
-    from_code: code(fromRaw) || fromRaw.slice(0,3).toUpperCase(),
-    to_code: code(toRaw) || toRaw.slice(0,3).toUpperCase(),
-    // Wenn du echte Namen im Datensatz hast, nutzt du die:
-    // from_name/to_name; sonst fallback auf code
-    from_name: null,
-    to_name: null,
-  };
+function fmtDate(ts) {
+  if (!ts) return "—";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(new Date(ts));
+  } catch {
+    return "—";
+  }
 }
 
-function splitTimes(time = "", dep_time, arr_time) {
-  if (dep_time || arr_time) return { dep: dep_time || "", arr: arr_time || "" };
-  // versucht "08:30 – 10:05", "08:30-10:05" zu parsen
-  const m = time.match(/(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})/);
-  return m ? { dep: m[1], arr: m[2] } : { dep: time || "", arr: "" };
+function fmtTime(ts) {
+  if (!ts) return "—";
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(ts));
+  } catch {
+    return "—";
+  }
+}
+
+function fmtPrice(amount, currency = "EUR") {
+  if (amount == null) return null;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 0,
+    }).format(Number(amount));
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+function timeAgo(ts) {
+  if (!ts) return null;
+  const diffMs = Date.now() - new Date(ts).getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "gerade eben";
+  if (diffMin < 60) return `vor ${diffMin} Min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `vor ${diffH} Std`;
+  const diffD = Math.floor(diffH / 24);
+  return `vor ${diffD} Tg`;
 }
 
 export default function FlightCard({ flight }) {
+  if (!flight) return null;
+
   const {
-    route, date, time, price, link, source, discount, aircraft,
-    // optionale exakt strukturierte Felder, falls vorhanden:
-    from_code, to_code, from_name, to_name, dep_time, arr_time, confirmed
-  } = flight || {};
+    source,
+    origin_iata,
+    origin_name,
+    destination_iata,
+    destination_name,
+    departure_ts,
+    arrival_ts,
+    aircraft,
+    link_latest,
+    currency_effective,
+    price_current,
+    price_normal,
+    discount_percent,
+    status_latest,
+    last_seen_at,
+  } = flight;
 
-  const r = splitRoute(route);
-  const codes = {
-    from: from_code || r.from_code,
-    to: to_code || r.to_code,
-  };
-  const names = {
-    from: airportNames[codes.from] || from_name || r.from_name || codes.from,
-    to: airportNames[codes.to] || to_name || r.to_name || codes.to,
-  };
-  const t = splitTimes(time, dep_time, arr_time);
+  const oCode = (origin_iata || "—").toUpperCase();
+  const dCode = (destination_iata || "—").toUpperCase();
+  const oName = origin_name || oCode;
+  const dName = destination_name || dCode;
 
-  const notConfirmed = confirmed === false || /not.*confirm/i.test(String(price || ""));
+  const depDate = fmtDate(departure_ts);
+  const depTime = fmtTime(departure_ts);
+  const arrTime = fmtTime(arrival_ts);
+
+  const priceLabel = fmtPrice(price_current, currency_effective);
+  const normalPriceLabel =
+    price_normal != null ? fmtPrice(price_normal, currency_effective) : null;
+
+  const showDiscount =
+    discount_percent != null && !Number.isNaN(Number(discount_percent));
+
+  const statusText =
+    status_latest?.toLowerCase() === "pending"
+      ? "Flight not yet confirmed"
+      : status_latest || "";
 
   return (
     <article className="card flightcard">
       {/* Kopfzeile */}
       <div className="flightcard__toprow">
-        <div className="flightcard__date">{date || "—"}</div>
+        <div className="flightcard__date">{depDate}</div>
+        {last_seen_at && (
+          <div className="updated-chip">{timeAgo(last_seen_at)}</div>
+        )}
       </div>
 
       {/* Airports & Zeiten */}
       <div className="flightcard__airports">
         <div className="flightcard__airport">
-          <div className="flightcard__name">{names.from}</div>
-          <div className="flightcard__code">{codes.from}</div>
-          <div className="flightcard__time">{t.dep || "—"}</div>
+          <div className="flightcard__name">{oName}</div>
+          <div className="flightcard__code">{oCode}</div>
+          <div className="flightcard__time">{depTime}</div>
         </div>
-
         <div className="flightcard__arrow" aria-hidden>—</div>
-
         <div className="flightcard__airport flightcard__airport--right">
-          <div className="flightcard__name">{names.to}</div>
-          <div className="flightcard__code">{codes.to}</div>
-          <div className="flightcard__time">{t.arr || "—"}</div>
+          <div className="flightcard__name">{dName}</div>
+          <div className="flightcard__code">{dCode}</div>
+          <div className="flightcard__time">{arrTime}</div>
         </div>
       </div>
 
       {/* Preis & Status */}
       <div className="flightcard__pricing">
-        {price ? (
-          <div className="price">{price}</div>
+        {priceLabel ? (
+          <div className="price">
+            {priceLabel}
+            {normalPriceLabel && (
+              <span className="price--strike">{normalPriceLabel}</span>
+            )}
+          </div>
         ) : (
-          <div className="status-note">Flight not yet confirmed</div>
+          <div className="status-note">{statusText}</div>
         )}
-        {discount ? (
-          <div className="badge badge--deal">−{discount}%</div>
-        ) : null}
-        {aircraft ? <div className="aircraft">{aircraft}</div> : null}
+        {showDiscount && (
+          <div className="badge badge--deal">−{Math.round(discount_percent)}%</div>
+        )}
+        {aircraft && <div className="aircraft">{aircraft}</div>}
       </div>
 
-      {/* Footer fixiert am Kartenende */}
+      {/* Footer */}
       <div className="card__footer">
-        {source ? (
-          <span className="opby">
-            Operated by <strong>{source}</strong>
-          </span>
-        ) : (
-          <span className="opby">Operated by <strong>—</strong></span>
-        )}
-
-        {link ? (
-          <a className="btn btn--primary" href={link} target="_blank" rel="noreferrer">
+        <span className="opby">
+          Operated by <strong>{source || "—"}</strong>
+        </span>
+        {link_latest ? (
+          <a className="btn btn--primary" href={link_latest} target="_blank" rel="noreferrer">
             Details / Buchen
           </a>
         ) : (

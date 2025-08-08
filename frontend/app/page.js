@@ -7,18 +7,17 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "https://jetcheck.onrender.com";
 
 export default function Home() {
-  const [globeair, setGlobeair] = useState([]);
-  const [asl, setAsl] = useState([]);
+  const [flights, setFlights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Suche/Filter & Sortierung (lassen wir drin)
+  // Suche/Filter & Sortierung
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [date, setDate] = useState("");
+  const [date, setDate] = useState(""); // YYYY-MM-DD
   const [maxPrice, setMaxPrice] = useState("");
-  const [sortKey, setSortKey] = useState("date");
+  const [sortKey, setSortKey] = useState("departure"); // departure | price | seen
   const [sortDir, setSortDir] = useState("asc");
 
   // Pagination
@@ -29,40 +28,21 @@ export default function Home() {
     let cancelled = false;
 
     async function load() {
+      setLoading(true);
+      setError("");
       try {
-        const [gaRes, aslRes] = await Promise.allSettled([
-          fetch(`${API_BASE}/api/globeair`, { cache: "no-store" }),
-          fetch(`${API_BASE}/api/asl`, { cache: "no-store" }),
-        ]);
-        if (cancelled) return;
+        const res = await fetch(`${API_BASE}/api/flights`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-        if (gaRes.status === "fulfilled") {
-          const data = await gaRes.value.json();
-          setGlobeair(
-            (Array.isArray(data) ? data : []).map((d) => ({
-              ...d,
-              source: "GlobeAir",
-            }))
-          );
-        } else {
-          console.error("GlobeAir fetch error:", gaRes.reason);
-          setError("Fehler beim Laden der GlobeAir-Daten.");
-        }
-
-        if (aslRes.status === "fulfilled") {
-          const data = await aslRes.value.json();
-          setAsl(
-            (Array.isArray(data) ? data : []).map((d) => ({
-              ...d,
-              source: "ASL",
-            }))
-          );
-        } else {
-          console.error("ASL fetch error:", aslRes.reason);
+        if (!cancelled) {
+          setFlights(Array.isArray(data) ? data : []);
         }
       } catch (e) {
         console.error(e);
-        setError("Unerwarteter Fehler beim Laden der Daten.");
+        if (!cancelled) setError("Fehler beim Laden der Flüge.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -74,48 +54,62 @@ export default function Home() {
     };
   }, []);
 
-  const rawFlights = useMemo(() => {
-    // Beide Quellen in eine Liste
-    return [...globeair, ...asl];
-  }, [globeair, asl]);
-
-  const priceToNumber = (price) => {
-    if (!price) return Number.POSITIVE_INFINITY;
-    const cleaned = String(price)
-      .replace(/[^\d.,]/g, "")
-      .replace(/\./g, "")
-      .replace(",", ".");
-    const num = Number.parseFloat(cleaned);
-    return Number.isNaN(num) ? Number.POSITIVE_INFINITY : num;
-    // Optional: wenn "Book for €990" kommt, wird oben automatisch 990 erkannt
+  const priceToNumber = (pCurrent, pNormal) => {
+    const val =
+      typeof pCurrent === "number" ? pCurrent :
+      typeof pNormal === "number" ? pNormal :
+      NaN;
+    return Number.isFinite(val) ? val : Number.POSITIVE_INFINITY;
   };
 
   const filtered = useMemo(() => {
     const qLower = q.trim().toLowerCase();
     const fromLower = from.trim().toLowerCase();
     const toLower = to.trim().toLowerCase();
-    const dateNorm = date.trim();
+    const dateNorm = date.trim(); // YYYY-MM-DD
 
-    return (rawFlights || []).filter((f) => {
-      const route = (f.route || "").toLowerCase();
-      const [dep, arr] = (f.route || "")
-        .split("→")
-        .map((s) => s?.trim().toLowerCase());
-      const d = (f.date || "").trim();
+    return (flights || []).filter((f) => {
+      const oName = (f.origin_name || "").toLowerCase();
+      const dName = (f.destination_name || "").toLowerCase();
+      const oIata = (f.origin_iata || "").toLowerCase();
+      const dIata = (f.destination_iata || "").toLowerCase();
 
-      if (qLower && !route.includes(qLower)) return false;
-      if (fromLower && !(dep || "").includes(fromLower)) return false;
-      if (toLower && !(arr || "").includes(toLower)) return false;
-      if (dateNorm && d !== dateNorm) return false;
+      // Textsuche über beide Orte + IATA
+      if (
+        qLower &&
+        !(
+          oName.includes(qLower) ||
+          dName.includes(qLower) ||
+          oIata.includes(qLower) ||
+          dIata.includes(qLower)
+        )
+      ) {
+        return false;
+      }
+
+      if (fromLower && !(oName.includes(fromLower) || oIata.includes(fromLower))) {
+        return false;
+      }
+      if (toLower && !(dName.includes(toLower) || dIata.includes(toLower))) {
+        return false;
+      }
+
+      if (dateNorm) {
+        const depDate = (f.departure_ts || "").slice(0, 10); // YYYY-MM-DD
+        if (depDate !== dateNorm) return false;
+      }
 
       if (maxPrice) {
         const max = Number(maxPrice);
-        if (!Number.isNaN(max) && priceToNumber(f.price) > max) return false;
+        if (!Number.isNaN(max)) {
+          const p = priceToNumber(f.price_current, f.price_normal);
+          if (p > max) return false;
+        }
       }
 
       return true;
     });
-  }, [rawFlights, q, from, to, date, maxPrice]);
+  }, [flights, q, from, to, date, maxPrice]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -123,17 +117,17 @@ export default function Home() {
       let A, B;
       switch (sortKey) {
         case "price":
-          A = priceToNumber(a.price);
-          B = priceToNumber(b.price);
+          A = priceToNumber(a.price_current, a.price_normal);
+          B = priceToNumber(b.price_current, b.price_normal);
           break;
-        case "time":
-          A = a.time || "";
-          B = b.time || "";
+        case "seen":
+          A = a.last_seen_at || "";
+          B = b.last_seen_at || "";
           break;
-        case "date":
+        case "departure":
         default:
-          A = a.date || "";
-          B = b.date || "";
+          A = a.departure_ts || "";
+          B = b.departure_ts || "";
           break;
       }
       if (A < B) return sortDir === "asc" ? -1 : 1;
@@ -144,12 +138,11 @@ export default function Home() {
   }, [filtered, sortKey, sortDir]);
 
   const total = sorted.length;
-  const pageSizeClamped = pageSize;
-  const totalPages = Math.max(1, Math.ceil(total / pageSizeClamped));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageItems = useMemo(() => {
-    const start = (currentPage - 1) * pageSizeClamped;
-    return sorted.slice(start, start + pageSizeClamped);
+    const start = (currentPage - 1) * pageSize;
+    return sorted.slice(start, start + pageSize);
   }, [sorted, currentPage]);
 
   useEffect(() => {
@@ -171,7 +164,7 @@ export default function Home() {
         <div className="searchbar">
           <input
             className="searchbar__input"
-            placeholder="Suche Route… (z. B. Ibiza oder ZRH)"
+            placeholder="Suche… (Ort oder IATA, z. B. Ibiza / IBZ)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -182,19 +175,20 @@ export default function Home() {
       <section className="controls">
         <input
           className="input"
-          placeholder="Abflug (z. B. IBZ)"
+          placeholder="Abflug (Ort/IATA, z. B. IBZ)"
           value={from}
           onChange={(e) => setFrom(e.target.value)}
         />
         <input
           className="input"
-          placeholder="Ziel (z. B. ZRH)"
+          placeholder="Ziel (Ort/IATA, z. B. ZRH)"
           value={to}
           onChange={(e) => setTo(e.target.value)}
         />
         <input
           className="input"
-          placeholder="Datum exakt (wie in der Karte)"
+          type="date"
+          placeholder="Datum (YYYY-MM-DD)"
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />
@@ -212,9 +206,9 @@ export default function Home() {
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value)}
           >
-            <option value="date">Datum</option>
-            <option value="time">Zeit</option>
+            <option value="departure">Abflugzeit</option>
             <option value="price">Preis</option>
+            <option value="seen">Zuletzt gesehen</option>
           </select>
           <select
             className="select"
@@ -250,10 +244,7 @@ export default function Home() {
               <>
                 <div className="grid">
                   {pageItems.map((f) => (
-                    <FlightCard
-                      key={f.id || `${f.route}-${f.time}-${f.price}`}
-                      flight={f}
-                    />
+                    <FlightCard key={f.id} flight={f} />
                   ))}
                 </div>
 
