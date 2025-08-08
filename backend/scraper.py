@@ -198,24 +198,34 @@ def fetch_globeair_cards(timeout: int = 25) -> List[Dict[str, Any]]:
 ASL_BASE = "https://www.aslgroup.eu"
 ASL_FIRST = f"{ASL_BASE}/en/empty-legs"
 
-RE_ASL_ROUTE = re.compile(r"\s*(.+?)\(([^)]+)\)\s*→?\s*(.+?)\(([^)]+)\)\s*")
 # Datum z. B. 09-08-2025, Uhrzeit 15:00, TZ Europe/Brussels
 ASL_TZ = ZoneInfo("Europe/Brussels")
 
-def _last_paren_code(text: str) -> str:
-    # nimmt den letzten (...) Inhalt als Code-Kandidat und extrahiert 3–4 Buchstaben/Ziffern (ICAO/IATA mix)
-    parts = re.findall(r"\(([^)]+)\)", text or "")
-    cand = parts[-1].strip() if parts else ""
-    # ICAO (4) oder IATA (3) akzeptieren, alphanumerisch
-    m = re.search(r"[A-Z0-9]{3,4}$", cand.strip())
-    return (m.group(0) if m else cand).upper()
+def _pick_code(text: str) -> str:
+    """
+    Sucht alle Codes in Klammern und bevorzugt IATA (3) gegenüber ICAO (4).
+    Z.B. "Montichiari (BS)(LIPO)" -> nimmt 3-stellig (falls vorhanden), sonst 4-stellig; jeweils den letzten Treffer.
+    """
+    if not text:
+        return ""
+    cands = re.findall(r"\(([A-Za-z0-9]{3,4})\)", text)
+    if not cands:
+        return ""
+    three = [c.upper() for c in cands if len(c) == 3]
+    if three:
+        return three[-1]
+    four = [c.upper() for c in cands if len(c) == 4]
+    return four[-1] if four else cands[-1].upper()
+
+def _clean_place_name(side_text: str) -> str:
+    base = re.sub(r"\([^)]+\)", "", side_text or "").strip()
+    return re.sub(r"\s+", " ", base)
 
 def _parse_asl_datetime(date_s: str, time_s: str) -> Optional[str]:
     try:
         # 09-08-2025 + 15:00 in Europe/Brussels
-        d = dtparser.parse(date_s, dayfirst=False)  # Format ist DD-MM-YYYY; dateutil frisst es
+        d = dtparser.parse(date_s, dayfirst=False)  # DD-MM-YYYY funktioniert mit dateutil
         t = dtparser.parse(time_s, default=d)
-        # tz-aware
         local = dt.datetime(
             year=d.year, month=d.month, day=d.day,
             hour=t.hour, minute=t.minute, tzinfo=ASL_TZ
@@ -233,40 +243,34 @@ def parse_asl_html(html: str) -> List[Dict[str, Any]]:
 
     for art in arts:
         # Aircraft
-        ac = (art.select_one(".plane-name") or {}).get_text(strip=True) if art.select_one(".plane-name") else None
+        ac_el = art.select_one(".plane-name")
+        ac = ac_el.get_text(strip=True) if ac_el else None
 
-        # Headline with route
-        headline = art.select_one(".plane-headline")
-        if not headline:
-            # fallback: take text of the leading-heading container
-            headline = art.select_one(".leading-headline")
+        # Headline with route (Icon ist <span>, darum get_text mit Trenner)
+        headline = art.select_one(".plane-headline") or art.select_one(".leading-headline")
         if not headline:
             continue
-        route_text = headline.get_text(" ", strip=True)
-        m = RE_ASL_ROUTE.search(route_text.replace("mdi mdi-arrow-right", "→"))
-        if not m:
-            # try more naive split by arrow icon
-            arrow = "→"
-            if arrow not in route_text:
-                arrow = "-"
-            parts = [p.strip() for p in route_text.split(arrow)]
-            if len(parts) != 2:
-                continue
-            left, right = parts
-            origin_name = re.sub(r"\([^)]*\)", "", left).strip()
-            dest_name = re.sub(r"\([^)]*\)", "", right).strip()
-            origin_iata = _last_paren_code(left)
-            dest_iata = _last_paren_code(right)
-        else:
-            left_name, left_code, right_name, right_code = m.groups()
-            origin_name = left_name.strip()
-            dest_name = right_name.strip()
-            origin_iata = _last_paren_code(left_code)
-            dest_iata = _last_paren_code(right_code)
+        route_text = headline.get_text(" | ", strip=True)
 
-        # Specs list (date/time/passengers)
-        date_li = None
-        time_li = None
+        # Erst unser Trenner, dann Fallback auf Pfeil/Bindestrich
+        parts = [p.strip() for p in route_text.split("|") if p.strip()]
+        if len(parts) < 2:
+            if "→" in route_text:
+                parts = [p.strip() for p in route_text.split("→", 1)]
+            elif "-" in route_text:
+                parts = [p.strip() for p in route_text.split("-", 1)]
+        if len(parts) < 2:
+            continue
+
+        left, right = parts[0], parts[-1]
+
+        origin_iata = _pick_code(left)
+        dest_iata   = _pick_code(right)
+        origin_name = _clean_place_name(left)
+        dest_name   = _clean_place_name(right)
+
+        # Specs list (date/time)
+        date_li = time_li = None
         for li in art.select("ul.plane-specs li"):
             txt = li.get_text(" ", strip=True)
             if re.search(r"\d{2}-\d{2}-\d{4}", txt):
@@ -286,12 +290,12 @@ def parse_asl_html(html: str) -> List[Dict[str, Any]]:
 
         rows.append({
             "source": "asl",
-            "origin_iata": origin_iata,
+            "origin_iata": origin_iata or (origin_name[:3].upper() if origin_name else None),
             "origin_name": origin_name,
-            "destination_iata": dest_iata,
+            "destination_iata": dest_iata or (dest_name[:3].upper() if dest_name else None),
             "destination_name": dest_name,
             "departure_ts": departure_ts,
-            "arrival_ts": None,   # Website zeigt keine Ankunft – optional später berechnen
+            "arrival_ts": None,   # keine Ankunftszeit auf der Seite
             "status": "pending",
             "price_current": None,
             "price_normal": None,
@@ -306,7 +310,6 @@ def parse_asl_html(html: str) -> List[Dict[str, Any]]:
     return rows
 
 def fetch_asl_cards(timeout: int = 25) -> List[Dict[str, Any]]:
-    # Seite 1 laden, max page ermitteln, alle Seiten iterieren
     def _get(url: str) -> str:
         r = SESSION.get(url, headers={**COMMON_HEADERS, "Referer": ASL_BASE + "/"}, timeout=timeout)
         if DEBUG:
@@ -318,7 +321,7 @@ def fetch_asl_cards(timeout: int = 25) -> List[Dict[str, Any]]:
     save_debug("asl_1.html", first_html)
     rows = parse_asl_html(first_html)
 
-    # Pagination: suche letzte Seite
+    # Pagination einsammeln (Zahlen-Links finden)
     soup = BeautifulSoup(first_html, "html.parser")
     pages = []
     for a in soup.select(".pagination a.pagination-page, .pagination a"):
@@ -329,7 +332,7 @@ def fetch_asl_cards(timeout: int = 25) -> List[Dict[str, Any]]:
             continue
     max_page = max([n for n, _ in pages], default=1)
 
-    # weitere Seiten holen
+    # weitere Seiten
     for p in range(2, max_page + 1):
         url = f"{ASL_BASE}/en/empty-legs/{p}"
         html = _get(url)
