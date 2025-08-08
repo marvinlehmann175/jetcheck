@@ -1,5 +1,14 @@
 "use client";
 
+const airportNames = {
+  'IBZ': 'Ibiza',
+  'ZRH': 'Zürich',
+  'AMS': 'Amsterdam',
+  'FRA': 'Frankfurt',
+  'LHR': 'London Heathrow',
+  // weitere Codes nach Bedarf
+};
+
 function splitRoute(route = "") {
   // akzeptiert "IBZ → ZRH" oder "Ibiza → Zürich"
   const parts = route.split(/→|->|-/).map(s => s.trim());
@@ -36,8 +45,8 @@ export default function FlightCard({ flight }) {
     to: to_code || r.to_code,
   };
   const names = {
-    from: (from_name || r.from_name || codes.from) ?? "",
-    to: (to_name || r.to_name || codes.to) ?? "",
+    from: airportNames[codes.from] || from_name || r.from_name || codes.from,
+    to: airportNames[codes.to] || to_name || r.to_name || codes.to,
   };
   const t = splitTimes(time, dep_time, arr_time);
 
