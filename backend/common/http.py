@@ -1,15 +1,15 @@
-# common/http.py
-"""
-Zentraler HTTP-Client für alle Scraper.
-Beinhaltet Standard-Header, Session-Handling und optionales Debug-Logging.
-"""
-
+# backend/common/http.py
 import os
+import re
+from pathlib import Path
+from typing import Optional
 import requests
 
 DEBUG = os.getenv("SCRAPER_DEBUG", "0") == "1"
 
-# Gemeinsame Browser-ähnliche Header
+# Eine einzige Session für alle Requests
+SESSION = requests.Session()
+
 COMMON_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -21,32 +21,42 @@ COMMON_HEADERS = {
     "Cache-Control": "no-cache",
 }
 
-# Eine Session für Wiederverwendung und Cookie-Handling
-SESSION = requests.Session()
-SESSION.headers.update(COMMON_HEADERS)
-
-
-def save_debug(name: str, text: str):
-    """Speichert HTML/Text im /tmp/jetcheck für Analyse im Debug-Modus."""
+def save_debug(name: str, text: str) -> None:
+    """Schreibt Debug-Dateien nach /tmp/jetcheck, wenn SCRAPER_DEBUG=1."""
     if not DEBUG:
         return
-    import pathlib
-    pathlib.Path("/tmp/jetcheck").mkdir(parents=True, exist_ok=True)
-    path = f"/tmp/jetcheck/{name}"
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+    outdir = Path("/tmp/jetcheck")
+    outdir.mkdir(parents=True, exist_ok=True)
+    path = outdir / name
+    path.write_text(text, encoding="utf-8")
     print(f"🪵 DEBUG saved: {path}")
 
-
-def get(url: str, referer: str = None, timeout: int = 25) -> str:
-    """
-    Führt einen GET-Request mit Standard-Headern und optionalem Referer aus.
-    """
-    headers = COMMON_HEADERS.copy()
+def get_html(url: str, *, referer: Optional[str] = None, timeout: int = 25) -> str:
+    """GET HTML-Text mit gemeinsamer Session & Standard-Headern."""
+    headers = dict(COMMON_HEADERS)
     if referer:
         headers["Referer"] = referer
     r = SESSION.get(url, headers=headers, timeout=timeout)
     if DEBUG:
-        print(f"GET {url} status={r.status_code}, len={len(r.text)}")
+        print(f"HTTP GET {url} -> {r.status_code}, len={len(r.text)}")
     r.raise_for_status()
     return r.text
+
+def absolute_url(base: str, href: Optional[str]) -> Optional[str]:
+    """Hilfsfunktion: macht relative Links absolut."""
+    if not href:
+        return None
+    if href.startswith(("http://", "https://")):
+        return href
+    if href.startswith("/"):
+        return base.rstrip("/") + href
+    return base.rstrip("/") + "/" + href
+
+__all__ = [
+    "DEBUG",
+    "SESSION",
+    "COMMON_HEADERS",
+    "save_debug",
+    "get_html",
+    "absolute_url",
+]
