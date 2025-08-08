@@ -20,6 +20,26 @@ class DebugCollector:
         if self.enabled:
             self.lines.append(f"[{self.provider}] {line}")
 
+    def log(self, line: str) -> None:
+        """Alias for add(); kept for compatibility with provider code calling dbg.log()."""
+        self.add(line)
+
+    def add_kv(self, key: str, value) -> None:
+        """Convenience helper to log key/value pairs in a consistent way."""
+        self.add(f"{key} = {value}")
+
+    def save_text(self, filename: str, text: str) -> None:
+        """Write arbitrary text (HTML or plain) to a debug file in outdir."""
+        if not (self.enabled and self.outdir):
+            return
+        path = self.outdir / filename
+        path.write_text(text, encoding="utf-8")
+        print(f"🪵 DEBUG saved: {path}")
+
+    def save(self, filename: str, text: str) -> None:
+        """Backwards-compatible alias for save_text()."""
+        self.save_text(filename, text)
+
     def save_html(self, filename: str, html: str) -> None:
         if not (self.enabled and self.outdir):
             return

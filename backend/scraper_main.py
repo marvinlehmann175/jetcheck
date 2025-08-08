@@ -1,7 +1,7 @@
 import os
 import sys
 import argparse
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import time
 
@@ -107,7 +107,7 @@ def main():
             Path(debug_dir).mkdir(parents=True, exist_ok=True)
             report_path = Path(debug_dir) / "scrape_report.txt"
             lines = [
-                f"JetCheck scrape report — {datetime.utcnow().isoformat(timespec='seconds')}Z",
+                f"JetCheck scrape report — {datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')}",
                 "",
                 "Per-provider counts:",
             ]
@@ -147,7 +147,7 @@ def main():
             Path(debug_dir).mkdir(parents=True, exist_ok=True)
             report_path = Path(debug_dir) / "scrape_report.txt"
             lines = [
-                f"JetCheck scrape report — {datetime.utcnow().isoformat(timespec='seconds')}Z",
+                f"JetCheck scrape report — {datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')}",
                 "",
                 "Per-provider counts:",
             ]
