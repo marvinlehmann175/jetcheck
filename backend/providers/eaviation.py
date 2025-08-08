@@ -33,7 +33,10 @@ def _departure_from_date_iso(date_text: str) -> Optional[str]:
 
 class EaviationProvider(Provider):
     name = "eaviation"
-    base_url = EAVIATION_URL
+    base_url = "https://www.e-aviation.de/"
+
+    def __init__(self, debug: bool | None = None, debug_dir: str | None = None):
+        super().__init__(debug=debug, debug_dir=debug_dir)
 
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(EAVIATION_URL)

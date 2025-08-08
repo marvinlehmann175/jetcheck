@@ -46,8 +46,8 @@ class GlobeAirProvider(Provider):
     name = "globeair"
     base_url = "https://www.globeair.com/"
 
-    def __init__(self, debug: bool | None = None):
-        super().__init__(debug)
+    def __init__(self, debug: bool | None = None, debug_dir: str | None = None):
+        super().__init__(debug=debug, debug_dir=debug_dir)
 
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(GLOBEAIR_URL, referer=self.base_url)

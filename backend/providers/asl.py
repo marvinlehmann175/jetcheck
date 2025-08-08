@@ -64,10 +64,10 @@ def _pick_code_pref_iata(text: Optional[str]) -> Optional[str]:
 
 class ASLProvider(Provider):
     name = "asl"
-    base_url = ASL_BASE + "/"
+    base_url = "https://www.aslgroup.eu/"
 
-    def __init__(self, debug: bool | None = None):
-        super().__init__(debug)
+    def __init__(self, debug: bool | None = None, debug_dir: str | None = None):
+        super().__init__(debug=debug, debug_dir=debug_dir)
 
     def fetch_all(self) -> List[FlightRecord]:
         rows: List[FlightRecord] = []
