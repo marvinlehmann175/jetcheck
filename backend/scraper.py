@@ -216,20 +216,28 @@ def upsert_flight_and_snapshot(rec: Dict[str, Any]) -> int:
 
     # Upsert nach unique hash (DB-Trigger setzt den Hash)
     up = (
-        supabase.table("flights")
-        .upsert(flight_payload, on_conflict="hash")
-        .select("id")
+        supabase
+        .table("flights")
+        .upsert(flight_payload, on_conflict="hash", returning="representation")
         .execute()
     )
     if not up.data:
         raise RuntimeError("Upsert flights returned no data")
     flight_id = up.data[0]["id"]
 
+    # Ensure prices are positive numbers if provided; otherwise store as None
+    price_current = rec.get("price_current")
+    price_normal = rec.get("price_normal")
+    if isinstance(price_current, (int, float)) and price_current <= 0:
+        price_current = None
+    if isinstance(price_normal, (int, float)) and price_normal <= 0:
+        price_normal = None
+
     # Snapshot IMMER anhängen (Historie)
     snap_payload = {
         "flight_id": flight_id,
-        "price_current": rec.get("price_current"),
-        "price_normal": rec.get("price_normal"),
+        "price_current": price_current,
+        "price_normal": price_normal,
         "currency": rec.get("currency", "EUR"),
         "status": rec.get("status"),
         "link": rec.get("link"),
