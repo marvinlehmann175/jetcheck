@@ -11,7 +11,7 @@ load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")
+TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")  # legacy table (kept for compatibility)
 
 # CORS config: either allow all via ALLOWED_ORIGIN="*" or specific list via ALLOWED_ORIGINS
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
@@ -60,14 +60,44 @@ def index():
     return (
         "JetCheck API\n\n"
         "Welcome! The API is running.\n\n"
-        "/api/globeair\n"
-        "/api/asl\n"
+        "Endpoints:\n"
+        "  • /api/flights         (NEU – Daten aus flights_latest)\n"
+        "  • /api/globeair        (Legacy, alte Tabelle falls noch benötigt)\n"
+        "  • /api/asl             (statisches JSON, falls vorhanden)\n"
+        "  • /healthz\n"
     ), 200, {"Content-Type": "text/plain; charset=utf-8"}
 
 @app.route("/healthz")
 def healthz():
     return jsonify({"status": "ok"})
 
+# NEW: unified endpoint backed by the 'flights_latest' view
+@app.route("/api/flights", methods=["GET", "OPTIONS"])
+def get_flights():
+    if supabase is None:
+        return jsonify({"error": "Supabase client not configured"}), 500
+    try:
+        # Fetch latest snapshot per flight (from the view)
+        resp = (
+            supabase
+            .table("flights_latest")
+            .select(
+                "id,source,origin_iata,origin_name,destination_iata,destination_name,"
+                "departure_ts,arrival_ts,aircraft,"
+                "price_current,price_normal,discount_percent,"
+                "currency_effective,status_latest,link_latest,last_seen_at"
+            )
+            .order("departure_ts", desc=False)
+            .limit(500)
+            .execute()
+        )
+        data = resp.data or []
+        return jsonify(data)
+    except Exception as e:
+        print(f"❌ /api/flights error: {e}", file=sys.stderr)
+        return jsonify({"error": "Failed to fetch flights"}), 500
+
+# Legacy endpoint (kept for compatibility while frontend migrates)
 @app.route("/api/globeair", methods=["GET", "OPTIONS"])
 def get_globeair():
     if supabase is None:
@@ -77,7 +107,7 @@ def get_globeair():
             supabase
             .table(TABLE)
             .select("id,route,date,time,price,link")
-            .order("id", desc=True)   # optional: wenn id existiert (tut sie)
+            .order("id", desc=True)
             .execute()
         )
         data = resp.data or []
