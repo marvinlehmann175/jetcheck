@@ -25,9 +25,8 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="JetCheck scraper orchestrator")
     p.add_argument(
         "--provider",
-        choices=["all", "globeair", "asl", "eaviation"],
+        choices=["all", "globeair", "asl", "eaviation", "callajet"],
         default=os.getenv("SCRAPER_PROVIDER", "all"),
-        help="Which provider to run (default: all)",
     )
     p.add_argument(
         "--dry-run",
@@ -48,18 +47,15 @@ def parse_args() -> argparse.Namespace:
 
 
 # helper:
-def run_provider(name: str, *, debug: bool, debug_dir: str | None):
+def run_provider(name: str, debug: bool, debug_dir: str | None) -> list[FlightRecord]:
     if name == "globeair":
         return GlobeAirProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "asl":
         return ASLProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "eaviation":
         return EaviationProvider(debug=debug, debug_dir=debug_dir).fetch_all()
-    if name == "callajet":
+    if name == "callajet":                                        # ⬅️ added
         return CallaJetProvider(debug=debug, debug_dir=debug_dir).fetch_all()
-    if name == "all":
-        # handled by loop
-        raise ValueError("use loop")
     raise ValueError(f"Unknown provider: {name}")
 
 
@@ -84,7 +80,8 @@ def main():
     t_start = time.time()
 
     providers = (
-        ["globeair", "asl", "eaviation"] if args.provider == "all" else [args.provider]
+        ["globeair", "asl", "eaviation", "callajet"]
+        if args.provider == "all" else [args.provider]
     )
     durations: dict[str, float] = {}
 
