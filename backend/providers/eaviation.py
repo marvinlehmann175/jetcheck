@@ -1,130 +1,134 @@
-# providers/eaviation.py
+# backend/providers/eaviation.py
+from __future__ import annotations
+
 import re
 import datetime as dt
 from typing import List
 
 from bs4 import BeautifulSoup
-from dateutil import parser as dtparser
 from zoneinfo import ZoneInfo
 
 from providers.base import Provider
 from common.http import get_html, save_debug
-from common.types import FlightRecord
 from common.airports import to_iata
+from common.types import FlightRecord
 
-EAV_BASE = "https://www.e-aviation.de"
-EAV_URL  = f"{EAV_BASE}/leerfluege/"
+EAVIATION_URL = "https://www.e-aviation.de/leerfluege/"
+BERLIN_TZ = ZoneInfo("Europe/Berlin")
 
-# Example bits:
-#   "Stuttgart, DE (STR) … Nuernberg, DE (NUE)"
 RE_CODE = re.compile(r"\(([A-Z0-9]{3,4})\)")
-RE_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})")  # "Verfügbar: 2025-08-08"
+RE_DATE = re.compile(r"(\d{4}-\d{2}-\d{2})")  # they print ISO like 2025-08-08
 
-# Site shows only a DATE (no exact dep time). Use a neutral local noon to avoid TZ pitfalls.
-DEFAULT_TZ = ZoneInfo("Europe/Berlin")
-DEFAULT_HOUR = 12
-DEFAULT_MIN = 0
+def _clean_place(text: str) -> str:
+    # "Stuttgart, DE (STR)" -> "Stuttgart, DE"
+    return re.sub(r"\s*\([^)]+\)\s*", "", (text or "")).strip()
 
+def _parse_date_iso(p_text: str) -> str | None:
+    # "Verfügbar: 2025-08-08" -> "2025-08-08T00:00:00Z" (midnight local → UTC)
+    m = RE_DATE.search(p_text or "")
+    if not m:
+        return None
+    y, mth, d = m.group(1).split("-")
+    local = dt.datetime(int(y), int(mth), int(d), 0, 0, tzinfo=BERLIN_TZ)
+    # normalize to UTC ISO8601 (Z)
+    return local.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 class EaviationProvider(Provider):
     name = "eaviation"
+    base_url = EAVIATION_URL
 
     def fetch_all(self) -> List[FlightRecord]:
-        html = get_html(EAV_URL, referer=EAV_BASE + "/")
+        html = get_html(EAVIATION_URL)
         save_debug("eaviation.html", html)
-        return self._parse(html)
 
-    def _parse(self, html: str) -> List[FlightRecord]:
         soup = BeautifulSoup(html, "html.parser")
-        items = soup.select(".search-hit-list .search-hit-list-item")
-        rows: List[FlightRecord] = []
+        items = soup.select(".search-hit-list-item")
+        if self.debug:
+            print(f"EAV items: {len(items)}")
 
-        for it in items:
-            # Route line (two <span> inside .t-empty-leg-description)
-            route_el = it.select_one(".t-empty-leg-description")
-            if not route_el:
+        flights: List[FlightRecord] = []
+
+        for item in items:
+            # Route block spans
+            route = item.select_one(".t-empty-leg-description")
+            if not route:
+                # sometimes the description may be structured slightly different
+                route = item.select_one(".lift__title.t-empty-leg-description")
+            if not route:
                 continue
-            spans = route_el.select("span")
+
+            spans = route.find_all("span")
             if len(spans) < 2:
                 continue
-            left_txt = spans[0].get_text(" ", strip=True)
-            right_txt = spans[-1].get_text(" ", strip=True)
 
-            # Codes (prefer IATA (3) even if 4-char ICAO appears; Airports resolver will normalize)
-            def pick_code(s: str) -> str | None:
-                m = RE_CODE.search(s or "")
-                if not m:
-                    return None
-                return to_iata(m.group(1))  # will convert ICAO->IATA if we have it; else pass-through
+            left_txt = spans[0].get_text(strip=True)
+            right_txt = spans[-1].get_text(strip=True)
 
-            origin_iata = pick_code(left_txt) or None
-            dest_iata   = pick_code(right_txt) or None
+            # IATA/ICAO code in parentheses
+            left_code = (RE_CODE.search(left_txt or "") or [None, None])[1]
+            right_code = (RE_CODE.search(right_txt or "") or [None, None])[1]
 
-            # Human names (strip trailing “(XXX)”)
-            def clean_name(s: str) -> str:
-                base = RE_CODE.sub("", s or "").strip()
-                return re.sub(r"\s{2,}", " ", base)
+            oi = to_iata(left_code) if left_code else None
+            di = to_iata(right_code) if right_code else None
 
-            origin_name = clean_name(left_txt)
-            dest_name   = clean_name(right_txt)
+            origin_name = _clean_place(left_txt)
+            dest_name = _clean_place(right_txt)
 
-            # Date (no time on page)
-            # <p>Verfügbar: 2025-08-08</p>
+            # Date paragraph containing "Verfügbar"
             date_p = None
-            for p in it.select("p"):
-                txt = p.get_text(" ", strip=True)
-                if "Verfügbar" in txt:
-                    date_p = txt
+            for p in item.select(".search-hit-list-item-details__lift-itinerary p"):
+                if "Verfügbar" in p.get_text():
+                    date_p = p.get_text(" ", strip=True)
                     break
-            dep_iso = None
-            if date_p:
-                dm = RE_DATE.search(date_p)
-                if dm:
-                    try:
-                        d = dtparser.parse(dm.group(1))
-                        local_noon = dt.datetime(d.year, d.month, d.day, DEFAULT_HOUR, DEFAULT_MIN, tzinfo=DEFAULT_TZ)
-                        dep_iso = local_noon.astimezone(dt.timezone.utc).isoformat().replace("+00:00", "Z")
-                    except Exception:
-                        dep_iso = None
+            departure_ts = _parse_date_iso(date_p or "") if date_p else None
 
-            # Aircraft (second .lift__title-row usually holds model)
+            # Aircraft: next title row after description
+            # There are multiple .lift__title-row blocks; the first is route,
+            # the second typically contains aircraft name
             ac = None
-            title_rows = it.select(".lift__title-row .lift__title")
+            title_rows = item.select(".lift__title-row .lift__title")
             if title_rows:
-                ac = title_rows[-1].get_text(" ", strip=True)
+                # find the first title that is NOT the route description
+                for t in title_rows:
+                    if "t-empty-leg-description" in t.get("class", []):
+                        continue
+                    ac = t.get_text(strip=True)
+                    if ac:
+                        break
 
-            # Link: there’s only an “Anfragen” button without href → keep None or fallback to site root
-            link = None
+            # Link: the button is not a normal anchor (JS), so keep the page URL as fallback
+            link = EAVIATION_URL
 
             # Build record
-            if not (origin_iata and dest_iata and dep_iso):
-                # If an IATA code is missing, try a last-ditch fallback: take first 3 letters of name
-                origin_iata = origin_iata or (origin_name[:3].upper() if origin_name else None)
-                dest_iata   = dest_iata   or (dest_name[:3].upper() if dest_name else None)
+            if not (oi and di and departure_ts):
+                # be strict: without both codes and a date, skip to avoid bad hashes
+                if self.debug:
+                    print(f"skip: oi={oi} di={di} date={departure_ts} text='{left_txt} → {right_txt}'")
+                continue
 
             rec: FlightRecord = {
-                "source": self.name,
-                "origin_iata": origin_iata,
+                "source": "eaviation",
+                "origin_iata": oi,
                 "origin_name": origin_name,
-                "destination_iata": dest_iata,
+                "destination_iata": di,
                 "destination_name": dest_name,
-                "departure_ts": dep_iso,   # required by DB: we supply local noon on that date
-                "arrival_ts": None,        # not provided
-                "status": "pending",
+                "departure_ts": departure_ts,
+                "arrival_ts": None,  # not provided
+                "aircraft": ac,
                 "currency": "EUR",
-                "link": link,
+                "status": "pending",
                 "price_current": None,
                 "price_normal": None,
                 "discount_percent": None,
                 "probability": None,
+                "link": link,
                 "raw": {
                     "route_left": left_txt,
                     "route_right": right_txt,
-                    "date_line": date_p,
+                    "date": date_p,
                 },
-                "raw_static": {"operator": "e-aviation", "aircraft": ac},
-                "aircraft": ac,
+                "raw_static": {"operator": "E-Aviation", "aircraft": ac},
             }
-            rows.append(rec)
+            flights.append(rec)
 
-        return rows
+        return flights

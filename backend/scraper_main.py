@@ -39,13 +39,16 @@ def parse_args() -> argparse.Namespace:
 
 
 # helper:
-def run_provider(name: str) -> list[FlightRecord]:
+def run_provider(name: str):
     if name == "globeair":
         return GlobeAirProvider().fetch_all()
     if name == "asl":
         return ASLProvider().fetch_all()
     if name == "eaviation":
         return EaviationProvider().fetch_all()
+    if name == "all":
+        # handled by loop
+        raise ValueError("use loop")
     raise ValueError(f"Unknown provider: {name}")
 
 
