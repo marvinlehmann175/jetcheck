@@ -115,7 +115,6 @@ body {
   width: 100%;
   max-width: 1200px;
   margin: 16px auto 20px;
-  padding: 24px 20px;
   box-shadow: 0 4px 15px rgba(139,92,246,0.15);
   border-radius: var(--radius-lg);
   background: linear-gradient(135deg, rgba(139,92,246,0.06), rgba(34,211,238,0.06));
@@ -130,6 +129,7 @@ body {
   font-size: 16px;
   outline: none;
   box-shadow: var(--shadow);
+  padding: 24px 20px;
 }
 .searchbar__input::placeholder { color: var(--muted); }
 .searchbar__input:focus {

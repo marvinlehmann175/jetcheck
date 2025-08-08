@@ -11,6 +11,7 @@ import db  # now safe
 
 from providers.globeair import GlobeAirProvider
 from providers.asl import ASLProvider
+from providers.eaviation import EaviationProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
 
@@ -20,7 +21,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="JetCheck scraper orchestrator")
     p.add_argument(
         "--provider",
-        choices=["all", "globeair", "asl"],
+        choices=["all", "globeair", "asl", "eaviation"],
         default=os.getenv("SCRAPER_PROVIDER", "all"),
         help="Which provider to run (default: all)",
     )
@@ -37,11 +38,14 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+# helper:
 def run_provider(name: str) -> list[FlightRecord]:
     if name == "globeair":
         return GlobeAirProvider().fetch_all()
     if name == "asl":
         return ASLProvider().fetch_all()
+    if name == "eaviation":
+        return EaviationProvider().fetch_all()
     raise ValueError(f"Unknown provider: {name}")
 
 
@@ -63,7 +67,9 @@ def main():
 
     print("🔄 Starte Scraper…")
 
-    providers = ["globeair", "asl"] if args.provider == "all" else [args.provider]
+    providers = (
+        ["globeair", "asl", "eaviation"] if args.provider == "all" else [args.provider]
+    )
 
     total_records: list[FlightRecord] = []
     for prov in providers:
