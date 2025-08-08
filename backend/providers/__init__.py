@@ -2,7 +2,7 @@
 from .globeair import GlobeAirProvider
 from .asl import ASLProvider
 from .eaviation import EaviationProvider
-from .callajet import CallaJetProvider
+from .callajet import CallajetProvider
 
 __all__ = [
     "GlobeAirProvider",

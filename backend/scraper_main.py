@@ -15,7 +15,7 @@ import db  # now safe
 from providers.globeair import GlobeAirProvider
 from providers.asl import ASLProvider
 from providers.eaviation import EaviationProvider
-from providers.callajet import CallaJetProvider
+from providers.callajet import CallajetProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
 
@@ -55,7 +55,7 @@ def run_provider(name: str, debug: bool, debug_dir: str | None) -> list[FlightRe
     if name == "eaviation":
         return EaviationProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "callajet":                                        # ⬅️ added
-        return CallaJetProvider(debug=debug, debug_dir=debug_dir).fetch_all()
+        return CallajetProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     raise ValueError(f"Unknown provider: {name}")
 
 
