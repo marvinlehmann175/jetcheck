@@ -73,7 +73,8 @@ class ASLProvider(Provider):
         rows: List[FlightRecord] = []
 
         first = get_html(ASL_FIRST, referer=self.base_url)
-        self.dbg.save_text("asl_1.html", first)
+        self.dbg.add(f"asl_first_bytes={len(first)}")
+        self.dbg.save_html("asl_1.html", first)
         rows.extend(self._parse(first))
 
         # pagination
@@ -90,7 +91,7 @@ class ASLProvider(Provider):
         for p in range(2, max_page + 1):
             url = f"{ASL_BASE}/en/empty-legs/{p}"
             html = get_html(url, referer=self.base_url)
-            self.dbg.save_text(f"asl_{p}.html", html)
+            self.dbg.save_html(f"asl_{p}.html", html)
             rows.extend(self._parse(html))
 
         return rows
@@ -98,6 +99,7 @@ class ASLProvider(Provider):
     def _parse(self, html: str) -> List[FlightRecord]:
         soup = BeautifulSoup(html, "html.parser")
         arts = soup.select("article.plane")
+        self.dbg.add(f"asl_items={len(arts)}")
         out: List[FlightRecord] = []
 
         for art in arts:

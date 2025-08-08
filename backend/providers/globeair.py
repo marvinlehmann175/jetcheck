@@ -51,8 +51,8 @@ class GlobeAirProvider(Provider):
 
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(GLOBEAIR_URL, referer=self.base_url)
-        if self.debug:
-            self.dbg.save("globeair.html", html)
+        self.dbg.save_html("globeair.html", html)
+        self.dbg.add(f"fetched_bytes={len(html)}")
         return self._parse(html)
 
     def _parse(self, html: str) -> List[FlightRecord]:

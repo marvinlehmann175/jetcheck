@@ -40,7 +40,8 @@ class EaviationProvider(Provider):
 
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(EAVIATION_URL)
-        self.dbg.save_text("eaviation.html", html)
+        self.dbg.save_html("eaviation.html", html)
+        self.dbg.add(f"fetched_bytes={len(html)}")
         soup = BeautifulSoup(html, "html.parser")
 
         # 1) Try server-rendered list (unlikely, but cheap check)
