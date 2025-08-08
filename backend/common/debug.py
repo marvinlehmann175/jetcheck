@@ -20,9 +20,16 @@ class DebugCollector:
         if self.enabled:
             self.lines.append(f"[{self.provider}] {line}")
 
-    def log(self, line: str) -> None:
-        """Alias for add(); kept for compatibility with provider code calling dbg.log()."""
-        self.add(line)
+    def log(self, key: str, value=None) -> None:
+        """
+        Log a message. If `value` is provided, store it as a key/value pair.
+        Supports existing calls like `dbg.log("message")` and new calls like
+        `dbg.log("items_ssr", 12)`.
+        """
+        if value is not None:
+            self.add_kv(key, value)
+        else:
+            self.add(key)
 
     def add_kv(self, key: str, value) -> None:
         """Convenience helper to log key/value pairs in a consistent way."""
