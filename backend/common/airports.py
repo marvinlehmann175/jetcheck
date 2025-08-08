@@ -2,10 +2,11 @@
 """
 Airports-Resolver (IATA/ICAO/Name/City) aus Supabase.
 Verwendet zentrale Helper:
-  - to_iata(code_or_name)  -> IATA (3)
-  - to_icao(code_or_name)  -> ICAO (4)
-  - to_names(code_or_name) -> (city, name)
-  - resolve(code_or_name)  -> komplette Row
+  - to_iata(code_or_name)      -> IATA (3)
+  - to_icao(code_or_name)      -> ICAO (4)
+  - to_names(code_or_name)     -> (city, name)
+  - to_iata_by_name(name)      -> IATA anhand Stadt/Name
+  - resolve(code_or_name)      -> komplette Row
 
 Hinweis:
 Wir nutzen NFKD-Normalisierung, entfernen Akzente und normalisieren
@@ -161,4 +162,50 @@ def to_names(code_or_name: str) -> Tuple[Optional[str], Optional[str]]:
     return (row.get("city"), row.get("name"))
 
 
-__all__ = ["build_indexes", "resolve", "to_iata", "to_icao", "to_names"]
+def to_iata_by_name(name: str) -> Optional[str]:
+    """
+    Versucht, eine IATA via Stadt- oder Flughafennamen zu finden.
+    Reihenfolge:
+      1) exakte Normalisierung (City/Name)
+      2) Prefix-Match (City/Name)
+      3) Teilstring-Match (City/Name)
+    Gibt den IATA-Code in UPPERCASE zurück oder None.
+    """
+    if not name:
+        return None
+    _ensure_loaded()
+
+    n = _norm(name)
+
+    # 1) Exakte Matches
+    row = _airport_index_by_city.get(n) or _airport_index_by_name.get(n)
+    if row and row.get("iata"):
+        return (row["iata"] or "").upper() or None
+
+    # 2) Prefix-Matches
+    for idx in (_airport_index_by_city, _airport_index_by_name):
+        for key, row in idx.items():
+            if key.startswith(n):
+                iata = (row.get("iata") or "").upper()
+                if iata:
+                    return iata
+
+    # 3) Teilstring-Matches
+    for idx in (_airport_index_by_city, _airport_index_by_name):
+        for key, row in idx.items():
+            if n in key:
+                iata = (row.get("iata") or "").upper()
+                if iata:
+                    return iata
+
+    return None
+
+
+__all__ = [
+    "build_indexes",
+    "resolve",
+    "to_iata",
+    "to_icao",
+    "to_names",
+    "to_iata_by_name",
+]
