@@ -1,8 +1,18 @@
 # backend/common/airports.py
 """
 Airports-Resolver (IATA/ICAO/Name/City) aus Supabase.
-Bietet bequeme Helpers: to_iata(), to_icao(), to_names().
+Verwendet zentrale Helper:
+  - to_iata(code_or_name)  -> IATA (3)
+  - to_icao(code_or_name)  -> ICAO (4)
+  - to_names(code_or_name) -> (city, name)
+  - resolve(code_or_name)  -> komplette Row
+
+Hinweis:
+Wir nutzen NFKD-Normalisierung, entfernen Akzente und normalisieren
+Whitespace, damit Städte/Namen robust gematcht werden.
 """
+
+from __future__ import annotations
 
 import os
 import unicodedata
@@ -12,20 +22,25 @@ from supabase import create_client, Client
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
+# Indizes im Speicher
 _airport_index_by_iata: Dict[str, Dict] = {}
 _airport_index_by_icao: Dict[str, Dict] = {}
 _airport_index_by_city: Dict[str, Dict] = {}
 _airport_index_by_name: Dict[str, Dict] = {}
 _loaded = False
 
+
 def _norm(s: str) -> str:
-    s = s or ""
+    """Lowercase, Akzente entfernen, Whitespace normalisieren."""
+    if not s:
+        return ""
     s = unicodedata.normalize("NFKD", s)
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     return " ".join(s.strip().lower().split())
 
+
 def build_indexes(force: bool = False) -> None:
-    """Lädt airports aus Supabase (airports) und baut Indizes."""
+    """Lädt airports aus Supabase (Tabelle 'airports') und baut Indizes."""
     global _loaded, _airport_index_by_iata, _airport_index_by_icao
     global _airport_index_by_city, _airport_index_by_name
 
@@ -62,25 +77,29 @@ def build_indexes(force: bool = False) -> None:
     _loaded = True
     print(f"✅ Airports-Index: {len(_airport_index_by_iata)} IATA, {len(_airport_index_by_icao)} ICAO")
 
-def _ensure_loaded():
+
+def _ensure_loaded() -> None:
     if not _loaded:
         build_indexes()
 
+
 def resolve(code_or_name: str) -> Optional[Dict]:
-    """Sucht Airport per IATA/ICAO/City/Name."""
+    """
+    Sucht Airport per IATA/ICAO/City/Name und gibt die komplette Row zurück.
+    """
     if not code_or_name:
         return None
     _ensure_loaded()
 
     s = code_or_name.strip().upper()
 
-    # direkter Code
+    # Direkter Code
     if len(s) == 3 and s in _airport_index_by_iata:
         return _airport_index_by_iata[s]
     if len(s) == 4 and s in _airport_index_by_icao:
         return _airport_index_by_icao[s]
 
-    # city / name
+    # City / Name
     n = _norm(code_or_name)
     if n in _airport_index_by_city:
         return _airport_index_by_city[n]
@@ -89,43 +108,57 @@ def resolve(code_or_name: str) -> Optional[Dict]:
 
     return None
 
+
 def to_iata(code_or_name: str) -> Optional[str]:
-    """Gibt IATA code (3) zurück – egal ob Input IATA, ICAO, City oder Name war."""
+    """
+    Gibt IATA code (3) zurück – egal ob Input IATA, ICAO, City oder Name war.
+    """
     if not code_or_name:
         return None
     _ensure_loaded()
+
     s = code_or_name.strip().upper()
     if len(s) == 3 and s in _airport_index_by_iata:
         return s
     if len(s) == 4 and s in _airport_index_by_icao:
         row = _airport_index_by_icao[s]
         return (row.get("iata") or "").upper() or None
+
     row = resolve(code_or_name)
     if row:
         return (row.get("iata") or "").upper() or None
     return None
 
+
 def to_icao(code_or_name: str) -> Optional[str]:
-    """Gibt ICAO code (4) zurück – Input kann IATA/ICAO/City/Name sein."""
+    """
+    Gibt ICAO code (4) zurück – Input kann IATA/ICAO/City/Name sein.
+    """
     if not code_or_name:
         return None
     _ensure_loaded()
+
     s = code_or_name.strip().upper()
     if len(s) == 4 and s in _airport_index_by_icao:
         return s
     if len(s) == 3 and s in _airport_index_by_iata:
         row = _airport_index_by_iata[s]
         return (row.get("icao") or "").upper() or None
+
     row = resolve(code_or_name)
     if row:
         return (row.get("icao") or "").upper() or None
     return None
 
+
 def to_names(code_or_name: str) -> Tuple[Optional[str], Optional[str]]:
-    """Gibt (city, name) zurück – nützlich für Kartenanzeige."""
+    """
+    Gibt (city, name) zurück – nützlich für Anzeige/Tooltips.
+    """
     row = resolve(code_or_name)
     if not row:
         return (None, None)
     return (row.get("city"), row.get("name"))
+
 
 __all__ = ["build_indexes", "resolve", "to_iata", "to_icao", "to_names"]

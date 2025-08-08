@@ -1,7 +1,10 @@
 # providers/globeair.py
+from __future__ import annotations
+
 import re
 from typing import List, Optional
 from urllib.parse import urljoin
+
 from bs4 import BeautifulSoup
 
 from providers.base import Provider
@@ -31,7 +34,7 @@ def _clean_money(text: Optional[str]):
             return None
 
 def _to_iso_utc_naive(date_str: Optional[str], time_str: Optional[str]) -> Optional[str]:
-    # Page shows local date/time without TZ; we store as naive-UTC string (as before)
+    # GlobeAir shows local date/time without TZ; store as naive-UTC string (same approach as before)
     from dateutil import parser as dtparser
     if not (date_str and time_str):
         return None
@@ -57,18 +60,24 @@ class GlobeAirProvider(Provider):
 
     def _parse(self, html: str) -> List[FlightRecord]:
         soup = BeautifulSoup(html, "html.parser")
-        cols = soup.select(".columns .column") or soup.select("div.column")
+        cols = soup.select(".columns .column")
+        if not cols:
+            cols = soup.select("div.column")
+        self.dbg.add(f"ga_cols={len(cols)}")
 
         rows: List[FlightRecord] = []
-        for col in cols:
+        for idx, col in enumerate(cols):
             h3 = col.select_one("h3.caption")
             p  = col.select_one("p.flightdata")
             if not h3 or not p:
+                # noisy, so only log when debug is explicitly enabled
+                self.dbg.add(f"skip[{idx}]=no_caption_or_flightdata")
                 continue
 
             title = h3.get_text(" ", strip=True)
             m = RE_GA_TITLE.match(title)
             if not m:
+                self.dbg.add(f"skip[{idx}]=title_nomatch '{title}'")
                 continue
             origin_name, origin_iata, dest_name, dest_iata = m.groups()
 
@@ -148,9 +157,11 @@ class GlobeAirProvider(Provider):
                     "title": title,
                     "date": date_line,
                     "times": time_line,
-                    "info": info_line
+                    "info": info_line,
                 },
                 "raw_static": {"operator": "GlobeAir"},
                 "aircraft": None,
             })
+
+        self.dbg.add(f"parsed={len(rows)}")
         return rows

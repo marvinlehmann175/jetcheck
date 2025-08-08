@@ -11,160 +11,145 @@ from zoneinfo import ZoneInfo
 from providers.base import Provider
 from common.http import get_html
 from common.types import FlightRecord
-from common.airports import to_iata
+from common.airports import to_iata_by_name  # ✅ use name→IATA resolver
 
-CALLAJET_URL = "https://www.callajet.de/privatjet-leerfluege/"
-LOCAL_TZ = ZoneInfo("Europe/Berlin")  # grobe Annahme – kann je nach Quelle variieren
+PAGE_URL = "https://www.callajet.de/privatjet-fluege/"
+TZ = ZoneInfo("Europe/Berlin")
 
-# Hilfs-Regex
-RE_CODE = re.compile(r"\(([A-Z0-9]{3,4})\)")
-RE_DATE_ISO = re.compile(r"(\d{4}-\d{2}-\d{2})")           # 2025-08-09
-RE_DATE_DMY = re.compile(r"(\d{1,2}\.\d{1,2}\.\d{4})")     # 09.08.2025
-RE_TIME = re.compile(r"(\d{1,2}:\d{2})")                   # 14:35
-RE_ROUTE_ARROW = re.compile(r"\s*[→\-]\s*")                # trennt "IBZ → ZRH" o.ä.
+RE_PRICE = re.compile(r"(\d[\d\.\,]*)")
+RE_DATE_DMY = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")  # 05.08.2025
+# Titles look like "Munich – Tavaux" (en dash or hyphen variations)
+SPLIT_ROUTE = re.compile(r"\s+[–-]\s+")
 
-def _clean(text: Optional[str]) -> str:
-    return re.sub(r"\s+", " ", (text or "").strip())
-
-def _strip_parens(text: str) -> str:
-    return re.sub(r"\s*\([^)]*\)\s*", "", text or "").strip()
-
-def _pick_code_pref_iata(text: str) -> Optional[str]:
-    m = RE_CODE.search(text or "")
+def _parse_date_dmy(s: str) -> Optional[str]:
+    m = RE_DATE_DMY.search(s or "")
     if not m:
         return None
-    return to_iata(m.group(1)) or m.group(1)
+    d, mth, y = map(int, m.groups())
+    local = dt.datetime(y, mth, d, 0, 0, tzinfo=TZ)
+    return local.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-def _to_utc_iso(date_s: Optional[str], time_s: Optional[str]) -> Optional[str]:
-    """Baue UTC-ISO aus (Datum[, Uhrzeit]) unter Annahme LOCAL_TZ."""
-    if not date_s:
+def _money_to_int(s: str) -> Optional[int]:
+    m = RE_PRICE.search(s or "")
+    if not m:
         return None
-    # Datumsformat erkennen
-    y, m, d = None, None, None
-    if RE_DATE_ISO.search(date_s or ""):
-        y, m, d = date_s.split("-")
-    else:
-        m_dmy = RE_DATE_DMY.search(date_s or "")
-        if m_dmy:
-            dd, mm, yyyy = m_dmy.group(1).split(".")
-            y, m, d = yyyy, mm, dd
-    if not (y and m and d):
-        return None
-
-    hh, mm = 0, 0
-    tm = RE_TIME.search(time_s or "")
-    if tm:
-        hh, mm = tm.group(1).split(":")
+    raw = m.group(1).replace(".", "").replace(",", ".")
     try:
-        local = dt.datetime(int(y), int(m), int(d), int(hh), int(mm), tzinfo=LOCAL_TZ)
-        return local.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return int(float(raw))
     except Exception:
         return None
 
-class CallaJetProvider(Provider):
+def _clean_city(s: str) -> str:
+    # remove extra whitespace etc.
+    return (s or "").strip()
+
+def _guess_iata_from_name(name: str) -> Optional[str]:
+    """
+    Map a free-text city/airport name to an IATA code:
+    1) direct lookup: to_iata_by_name(name)
+    2) try first/last token
+    3) last resort: 3-letter uppercase slice if alphabetic (keeps out digits/garbage)
+    """
+    if not name:
+        return None
+    code = to_iata_by_name(name)
+    if code:
+        return code
+    tokens = re.split(r"[,\\s/–-]+", name.strip())
+    candidates = []
+    if tokens:
+        candidates.append(tokens[0])
+        candidates.append(tokens[-1])
+    for cand in candidates:
+        if not cand:
+            continue
+        code = to_iata_by_name(cand)
+        if code:
+            return code
+    rough = name[:3].upper()
+    return rough if rough.isalpha() and len(rough) == 3 else None
+
+class CallajetProvider(Provider):
     name = "callajet"
     base_url = "https://www.callajet.de/"
 
-    def __init__(self, debug: bool | None = None, debug_dir: str | None = None):
-        super().__init__(debug, debug_dir)
-
     def fetch_all(self) -> List[FlightRecord]:
-        # 1) HTML laden & debug speichern
-        html = get_html(CALLAJET_URL, referer=self.base_url)
+        html = get_html(PAGE_URL, referer=self.base_url)
         self.dbg.save_html("callajet.html", html)
 
-        # 2) Parsen
-        flights = self._parse(html)
-        self.dbg.add_kv("items_parsed", len(flights))
-        return flights
-
-    def _parse(self, html: str) -> List[FlightRecord]:
         soup = BeautifulSoup(html, "html.parser")
+        # Each flight card is a .tmb inside .isotope-container
+        cards = soup.select(".isotope-container .tmb")
+        self.dbg.add(f"cards={len(cards)}")
+
         out: List[FlightRecord] = []
-
-        # --- TAB finden (All-TAB) ---
-        # Häufiger Aufbau: <div id="tab-1753881400708-2-217539465301761753957562541"> ... </div>
-        # Falls sich die ID ändert, alternativ: suche nach data-Attributen / Rolle.
-        tab_all = soup.select_one('#tab-1753881400708-2-217539465301761753957562541')
-        if not tab_all:
-            # Fallback: irgendein Tab-Panel, das viele Einträge hat
-            candidates = soup.select('[id^="tab-"]')
-            self.dbg.add_kv("tab_candidates", len(candidates))
-            # nimm das größte Panel (heuristik)
-            tab_all = max(candidates, key=lambda el: len(el.get_text(strip=True)), default=None)
-
-        if not tab_all:
-            self.dbg.add("no_tab_panel_found")
-            return out
-
-        # --- Einträge selektieren ---
-        # TODO: Klassennamen/Struktur an realen HTML anpassen.
-        # Platzhalter-Selektor:
-        items = tab_all.select(".elementor-widget, .jet-listing-grid__item, .flight-item, .elementor-post") or []
-        self.dbg.add_kv("items_found", len(items))
-
-        if not items:
-            # fallback: alles innerhalb des Tabs und später filtern
-            items = tab_all.find_all(["article", "div"], recursive=True)
-
-        for el in items:
-            text_all = _clean(el.get_text(" ", strip=True))
-            if not text_all:
+        for i, card in enumerate(cards):
+            # title: h3.t-entry-title e.g. "Munich – Tavaux"
+            h3 = card.select_one("h3.t-entry-title")
+            if not h3:
                 continue
+            title = h3.get_text(" ", strip=True)
 
-            # --- Heuristisch: Route extrahieren ---
-            # Oft steht eine Route wie "Ibiza (IBZ) → Zürich (ZRH)" oder "IBZ → ZRH"
-            route_block = text_all
-            parts = re.split(RE_ROUTE_ARROW, route_block)
-            left_txt = right_txt = None
-            if len(parts) >= 2:
-                left_txt, right_txt = parts[0], parts[-1]
+            parts = SPLIT_ROUTE.split(title)
+            if len(parts) < 2:
+                # try simple split as fallback
+                parts = [p.strip() for p in re.split(r"\s*-\s*", title) if p.strip()]
+                if len(parts) < 2:
+                    self.dbg.add(f"skip[{i}]: route parse fail '{title}'")
+                    continue
+            origin_name = _clean_city(parts[0])
+            dest_name   = _clean_city(parts[-1])
 
-            origin_iata = _pick_code_pref_iata(left_txt or "") if left_txt else None
-            dest_iata   = _pick_code_pref_iata(right_txt or "") if right_txt else None
-            origin_name = _strip_parens(left_txt or "") if left_txt else ""
-            dest_name   = _strip_parens(right_txt or "") if right_txt else ""
+            # date: .t-entry-cf-acf-current_flights_date e.g. 05.08.2025
+            date_el = card.select_one(".t-entry-cf-acf-current_flights_date")
+            departure_ts = _parse_date_dmy(date_el.get_text(strip=True)) if date_el else None
 
-            # --- Datum / Uhrzeit finden ---
-            # Versuche ISO oder DMY + Uhrzeit im gleichen Block
-            date_match = RE_DATE_ISO.search(text_all) or RE_DATE_DMY.search(text_all)
-            time_match = RE_TIME.search(text_all)
-            departure_ts = _to_utc_iso(date_match.group(1) if date_match else None,
-                                       time_match.group(1) if time_match else None)
-
-            # --- Aircraft (optional) ---
+            # aircraft: in “Jet:” row (optional link or text)
+            jet_el = card.select_one(".t-entry-cf-acf-current_flights_jet")
             aircraft = None
-            # Häufig: ein Label wie "Cessna Citation..." – hier nur simple Heuristik:
-            # Wenn du einen stabilen Selektor findest (z.B. .jet-name), nutze den stattdessen.
-            # aircraft = _extract_aircraft(el)  # optional Funktion
+            if jet_el:
+                # either "<strong>Jet: </strong>Text" or contains <a>
+                a = jet_el.find("a")
+                aircraft = (a.get_text(strip=True) if a else jet_el.get_text(" ", strip=True))
+                aircraft = re.sub(r"^\s*Jet:\s*", "", aircraft, flags=re.I).strip()
 
-            # Einfache Validierung
-            if not (origin_iata and dest_iata and departure_ts):
-                # Debug mit kurzer Rohvorschau
-                self.dbg.add(f"skip: oi={origin_iata}, di={dest_iata}, dep={departure_ts}; snippet='{text_all[:120]}'")
+            # price: “Price: 13.500€” -> number only
+            price_el = card.select_one(".t-entry-cf-acf-current_flights_price")
+            price_current = _money_to_int(price_el.get_text(" ", strip=True)) if price_el else None
+
+            # Map names → IATA using airports index (with sane fallbacks)
+            origin_iata = _guess_iata_from_name(origin_name)
+            dest_iata   = _guess_iata_from_name(dest_name)
+            if not (origin_iata and dest_iata):
+                self.dbg.add(
+                    f"skip[{i}]: no IATA (origin='{origin_name}'→{origin_iata}, dest='{dest_name}'→{dest_iata})"
+                )
                 continue
 
             rec: FlightRecord = {
                 "source": self.name,
                 "origin_iata": origin_iata,
-                "origin_name": origin_name or origin_iata,
+                "origin_name": origin_name,
                 "destination_iata": dest_iata,
-                "destination_name": dest_name or dest_iata,
+                "destination_name": dest_name,
                 "departure_ts": departure_ts,
                 "arrival_ts": None,
+                "aircraft": aircraft,
+                "currency": "EUR",
                 "status": "pending",
-                "price_current": None,
+                "price_current": price_current,
                 "price_normal": None,
                 "discount_percent": None,
                 "probability": None,
-                "currency": "EUR",
-                "link": CALLAJET_URL,  # meist führt der CTA zu einem Modal/JS; Seite ist ok als Deeplink
+                "link": PAGE_URL,  # no per-card link; keep page link
                 "raw": {
-                    "block_text": text_all[:1000],  # begrenzen für Debug
+                    "title": title,
+                    "date": date_el.get_text(strip=True) if date_el else None,
+                    "price": price_el.get_text(" ", strip=True) if price_el else None,
                 },
                 "raw_static": {"operator": "Call a Jet", "aircraft": aircraft},
-                "aircraft": aircraft,
             }
             out.append(rec)
 
+        self.dbg.add(f"parsed={len(out)}")
         return out

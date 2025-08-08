@@ -18,7 +18,7 @@ BERLIN_TZ = ZoneInfo("Europe/Berlin")
 
 RE_CODE = re.compile(r"\(([A-Z0-9]{3,4})\)")
 RE_DATE_ISO = re.compile(r"(\d{4}-\d{2}-\d{2})")  # 2025-08-08
-RE_EMBEDDED_JSON = re.compile(r'"emptyLegs"\s*:\s*(\[[\s\S]*?\])')  # hopeful fallback
+RE_EMBEDDED_JSON = re.compile(r'"emptyLegs"\s*:\s*(\[[\s\S]*?\])')
 
 def _clean_place(text: str) -> str:
     return re.sub(r"\s*\([^)]+\)\s*", "", (text or "")).strip()
@@ -42,11 +42,12 @@ class EaviationProvider(Provider):
         html = get_html(EAVIATION_URL)
         self.dbg.save_html("eaviation.html", html)
         self.dbg.add(f"fetched_bytes={len(html)}")
+
         soup = BeautifulSoup(html, "html.parser")
 
         # 1) Try server-rendered list (unlikely, but cheap check)
         items = soup.select(".search-hit-list-item")
-        self.dbg.log("items_ssr", len(items))
+        self.dbg.add(f"items_ssr={len(items)}")
 
         if items:
             recs = self._parse_items(items)
@@ -54,12 +55,11 @@ class EaviationProvider(Provider):
                 return recs
 
         # 2) Try <noscript> (sometimes widgets dump fallback HTML there)
-        noscripts = soup.find_all("noscript")
-        for ns in noscripts:
+        for ns in soup.find_all("noscript"):
             ns_soup = BeautifulSoup(ns.string or "", "html.parser")
             ns_items = ns_soup.select(".search-hit-list-item")
             if ns_items:
-                self.dbg.log("noscript_items", len(ns_items))
+                self.dbg.add(f"noscript_items={len(ns_items)}")
                 recs = self._parse_items(ns_items)
                 if recs:
                     return recs
@@ -67,11 +67,11 @@ class EaviationProvider(Provider):
         # 3) Try embedded JSON patterns we can parse without JS
         m = RE_EMBEDDED_JSON.search(html)
         if m:
-            self.dbg.log("embedded_json_detected", True)
-            # You could add a real JSON parser here if/when we learn their schema.
+            self.dbg.add("embedded_json_detected=1")
+            # TODO: If we learn their schema, parse m.group(1) as JSON here.
 
         # Nothing usable without JS → return empty, don’t fail builds.
-        self.dbg.log("js_rendered_skip", True)
+        self.dbg.add("js_rendered_skip=1")
         return []
 
     def _parse_items(self, items) -> List[FlightRecord]:
@@ -109,9 +109,7 @@ class EaviationProvider(Provider):
             title_rows = item.select(".lift__title-row .lift__title")
             if title_rows:
                 for t in title_rows:
-                    # skip the route description node (has the t-empty-leg-description class)
-                    classes = t.get("class", [])
-                    if "t-empty-leg-description" in classes:
+                    if "t-empty-leg-description" in (t.get("class") or []):
                         continue
                     text = t.get_text(strip=True)
                     if text:
@@ -122,11 +120,9 @@ class EaviationProvider(Provider):
             link = EAVIATION_URL
 
             if not (oi and di and departure_ts):
-                # strict: avoid creating ambiguous hashes
-                self.dbg.log("skip_incomplete", {
-                    "oi": oi, "di": di, "date": departure_ts,
-                    "route": f"{left_txt} → {right_txt}",
-                })
+                self.dbg.add(
+                    f"skip_incomplete oi={oi} di={di} date={departure_ts} route='{left_txt} -> {right_txt}'"
+                )
                 continue
 
             flights.append({
