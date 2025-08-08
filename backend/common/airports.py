@@ -1,103 +1,131 @@
 # backend/common/airports.py
 """
-Airports-Resolver (IATA/ICAO) mit Lazy-Load aus Supabase.
-Erlaubt schnelle Lookups und Normalisierung von Codes.
+Airports-Resolver (IATA/ICAO/Name/City) aus Supabase.
+Bietet bequeme Helpers: to_iata(), to_icao(), to_names().
 """
 
 import os
+import unicodedata
 from typing import Dict, Optional, Tuple
 from supabase import create_client, Client
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
+_airport_index_by_iata: Dict[str, Dict] = {}
+_airport_index_by_icao: Dict[str, Dict] = {}
+_airport_index_by_city: Dict[str, Dict] = {}
+_airport_index_by_name: Dict[str, Dict] = {}
+_loaded = False
 
-class Airports:
-    _loaded: bool = False
-    _by_iata: Dict[str, Dict] = {}
-    _by_icao: Dict[str, Dict] = {}
+def _norm(s: str) -> str:
+    s = s or ""
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    return " ".join(s.strip().lower().split())
 
-    @classmethod
-    def ensure_loaded(cls) -> None:
-        """Lazy-Load: lädt Airport-Daten einmalig aus Supabase."""
-        if cls._loaded:
-            return
-        if not SUPABASE_URL or not SUPABASE_KEY:
-            raise RuntimeError("❌ SUPABASE_URL/SUPABASE_KEY fehlen für Airports-Resolver")
+def build_indexes(force: bool = False) -> None:
+    """Lädt airports aus Supabase (airports) und baut Indizes."""
+    global _loaded, _airport_index_by_iata, _airport_index_by_icao
+    global _airport_index_by_city, _airport_index_by_name
 
-        client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        res = client.table("airports").select("*").execute()
-        data = res.data or []
+    if _loaded and not force:
+        return
 
-        cls._by_iata.clear()
-        cls._by_icao.clear()
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise RuntimeError("❌ SUPABASE_URL/SUPABASE_KEY fehlen für Airports-Lookup")
 
-        for row in data:
-            iata = (row.get("iata") or "").upper()
-            icao = (row.get("icao") or "").upper()
-            if iata:
-                cls._by_iata[iata] = row
-            if icao:
-                cls._by_icao[icao] = row
+    client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    res = client.table("airports").select("*").execute()
+    rows = res.data or []
 
-        cls._loaded = True
-        print(f"✅ Airports geladen: {len(cls._by_iata)} IATA, {len(cls._by_icao)} ICAO")
+    _airport_index_by_iata.clear()
+    _airport_index_by_icao.clear()
+    _airport_index_by_city.clear()
+    _airport_index_by_name.clear()
 
-    # -------- Convenience-APIs --------
+    for row in rows:
+        iata = (row.get("iata") or "").upper()
+        icao = (row.get("icao") or "").upper()
+        city = row.get("city") or ""
+        name = row.get("name") or ""
 
-    @classmethod
-    def resolve(cls, code: Optional[str]) -> Optional[Dict]:
-        """Gibt Airport-Row zu IATA/ICAO zurück (oder None)."""
-        if not code:
-            return None
-        cls.ensure_loaded()
-        c = code.upper()
-        return cls._by_iata.get(c) or cls._by_icao.get(c)
+        if iata:
+            _airport_index_by_iata[iata] = row
+        if icao:
+            _airport_index_by_icao[icao] = row
+        if city:
+            _airport_index_by_city[_norm(city)] = row
+        if name:
+            _airport_index_by_name[_norm(name)] = row
 
-    @classmethod
-    def to_iata(cls, code: Optional[str]) -> Optional[str]:
-        """Normalisiert beliebigen Code (IATA/ICAO) zu IATA (falls bekannt)."""
-        row = cls.resolve(code or "")
-        return (row or {}).get("iata")
+    _loaded = True
+    print(f"✅ Airports-Index: {len(_airport_index_by_iata)} IATA, {len(_airport_index_by_icao)} ICAO")
 
-    @classmethod
-    def to_icao(cls, code: Optional[str]) -> Optional[str]:
-        """Normalisiert beliebigen Code (IATA/ICAO) zu ICAO (falls bekannt)."""
-        row = cls.resolve(code or "")
-        return (row or {}).get("icao")
+def _ensure_loaded():
+    if not _loaded:
+        build_indexes()
 
-    @classmethod
-    def name_for(cls, code: Optional[str]) -> Optional[str]:
-        """Liefert Anzeigenamen (city_name oder airport_name) für Code."""
-        row = cls.resolve(code or "")
-        if not row:
-            return None
-        return row.get("city_name") or row.get("airport_name")
+def resolve(code_or_name: str) -> Optional[Dict]:
+    """Sucht Airport per IATA/ICAO/City/Name."""
+    if not code_or_name:
+        return None
+    _ensure_loaded()
 
-    @classmethod
-    def codes_for(cls, name_or_code: Optional[str]) -> Tuple[Optional[str], Optional[str]]:
-        """
-        Versucht, aus Name/Code beide Codes (IATA, ICAO) zu liefern.
-        Wenn `name_or_code` bereits IATA/ICAO ist, nutzt resolve().
-        """
-        if not name_or_code:
-            return (None, None)
-        row = cls.resolve(name_or_code)
-        if row:
-            return (row.get("iata"), row.get("icao"))
-        # Optional: hier könnte man später fuzzy Name-Suche ergänzen
+    s = code_or_name.strip().upper()
+
+    # direkter Code
+    if len(s) == 3 and s in _airport_index_by_iata:
+        return _airport_index_by_iata[s]
+    if len(s) == 4 and s in _airport_index_by_icao:
+        return _airport_index_by_icao[s]
+
+    # city / name
+    n = _norm(code_or_name)
+    if n in _airport_index_by_city:
+        return _airport_index_by_city[n]
+    if n in _airport_index_by_name:
+        return _airport_index_by_name[n]
+
+    return None
+
+def to_iata(code_or_name: str) -> Optional[str]:
+    """Gibt IATA code (3) zurück – egal ob Input IATA, ICAO, City oder Name war."""
+    if not code_or_name:
+        return None
+    _ensure_loaded()
+    s = code_or_name.strip().upper()
+    if len(s) == 3 and s in _airport_index_by_iata:
+        return s
+    if len(s) == 4 and s in _airport_index_by_icao:
+        row = _airport_index_by_icao[s]
+        return (row.get("iata") or "").upper() or None
+    row = resolve(code_or_name)
+    if row:
+        return (row.get("iata") or "").upper() or None
+    return None
+
+def to_icao(code_or_name: str) -> Optional[str]:
+    """Gibt ICAO code (4) zurück – Input kann IATA/ICAO/City/Name sein."""
+    if not code_or_name:
+        return None
+    _ensure_loaded()
+    s = code_or_name.strip().upper()
+    if len(s) == 4 and s in _airport_index_by_icao:
+        return s
+    if len(s) == 3 and s in _airport_index_by_iata:
+        row = _airport_index_by_iata[s]
+        return (row.get("icao") or "").upper() or None
+    row = resolve(code_or_name)
+    if row:
+        return (row.get("icao") or "").upper() or None
+    return None
+
+def to_names(code_or_name: str) -> Tuple[Optional[str], Optional[str]]:
+    """Gibt (city, name) zurück – nützlich für Kartenanzeige."""
+    row = resolve(code_or_name)
+    if not row:
         return (None, None)
+    return (row.get("city"), row.get("name"))
 
-
-# Kurze Funktions-Aliase für bequeme Nutzung in den Providern
-def resolve(code: Optional[str]) -> Optional[Dict]:
-    return Airports.resolve(code)
-
-def to_iata(code: Optional[str]) -> Optional[str]:
-    return Airports.to_iata(code)
-
-def to_icao(code: Optional[str]) -> Optional[str]:
-    return Airports.to_icao(code)
-
-def name_for(code: Optional[str]) -> Optional[str]:
-    return Airports.name_for(code)
+__all__ = ["build_indexes", "resolve", "to_iata", "to_icao", "to_names"]
