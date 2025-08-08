@@ -8,7 +8,7 @@ from dateutil import parser as dtparser
 from zoneinfo import ZoneInfo
 
 from providers.base import Provider
-from common.http import get_html, save_debug
+from common.http import get_html
 from common.types import FlightRecord
 from common.airports import to_iata
 
@@ -73,8 +73,7 @@ class ASLProvider(Provider):
         rows: List[FlightRecord] = []
 
         first = get_html(ASL_FIRST, referer=self.base_url)
-        if self.debug:
-            save_debug("asl_1.html", first)
+        self.dbg.save_text("asl_1.html", first)
         rows.extend(self._parse(first))
 
         # pagination
@@ -91,8 +90,7 @@ class ASLProvider(Provider):
         for p in range(2, max_page + 1):
             url = f"{ASL_BASE}/en/empty-legs/{p}"
             html = get_html(url, referer=self.base_url)
-            if self.debug:
-                save_debug(f"asl_{p}.html", html)
+            self.dbg.save_text(f"asl_{p}.html", html)
             rows.extend(self._parse(html))
 
         return rows

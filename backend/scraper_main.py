@@ -1,6 +1,8 @@
 import os
 import sys
 import argparse
+from datetime import datetime
+from pathlib import Path
 
 # ensure local imports (db.py) work when running this file directly
 sys.path.append(os.path.dirname(__file__))
@@ -14,6 +16,8 @@ from providers.asl import ASLProvider
 from providers.eaviation import EaviationProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
+from common.http import DEBUG as HTTP_DEBUG
+from common.debug import DebugCollector
 
 
 
@@ -35,17 +39,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Verbose debug logging (also honors SCRAPER_DEBUG=1)",
     )
+    p.add_argument(
+        "--debug-dir",
+        default=os.getenv("SCRAPER_DEBUG_DIR"),
+        help="Directory to write debug artifacts (defaults to /tmp/jetcheck if --debug is set)",
+    )
     return p.parse_args()
 
 
 # helper:
-def run_provider(name: str):
+def run_provider(name: str, *, debug: bool, debug_dir: str | None):
     if name == "globeair":
-        return GlobeAirProvider().fetch_all()
+        return GlobeAirProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "asl":
-        return ASLProvider().fetch_all()
+        return ASLProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "eaviation":
-        return EaviationProvider().fetch_all()
+        return EaviationProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "all":
         # handled by loop
         raise ValueError("use loop")
@@ -58,6 +67,7 @@ def main():
     args = parse_args()
     env_debug = os.getenv("SCRAPER_DEBUG", "0") == "1"
     debug = args.debug or env_debug
+    debug_dir = args.debug_dir or ("/tmp/jetcheck" if debug else None)
 
     # Preload airport indexes once (fail fast if airports table missing)
     try:
@@ -75,10 +85,12 @@ def main():
     )
 
     total_records: list[FlightRecord] = []
+    provider_counts: dict[str, int] = {}
     for prov in providers:
         try:
-            recs = run_provider(prov)
+            recs = run_provider(prov, debug=debug, debug_dir=debug_dir)
             print(f"ℹ️  {prov.capitalize()}: {len(recs)}")
+            provider_counts[prov] = len(recs)
             total_records.extend(recs)
         except Exception as e:
             print(f"❌ {prov} fetch error: {e}", file=sys.stderr)
@@ -98,6 +110,29 @@ def main():
             oc = r.get("origin_iata")
             dc = r.get("destination_iata")
             print(f"❌ Fehler für {oc}→{dc}: {e}", file=sys.stderr)
+
+    # Combined debug report
+    if debug and debug_dir:
+        try:
+            Path(debug_dir).mkdir(parents=True, exist_ok=True)
+            report_path = Path(debug_dir) / "scrape_report.txt"
+            lines = [
+                f"JetCheck scrape report — {datetime.utcnow().isoformat(timespec='seconds')}Z",
+                "",
+                "Per-provider counts:",
+            ]
+            for k in ["globeair", "asl", "eaviation"]:
+                if k in provider_counts:
+                    lines.append(f"  - {k}: {provider_counts[k]}")
+            lines += [
+                "",
+                f"Total parsed: {len(total_records)}",
+                f"Total saved: {saved}",
+            ]
+            report_path.write_text("\n".join(lines), encoding="utf-8")
+            print(f"🧾 Debug report written: {report_path}")
+        except Exception as e:
+            print(f"⚠️  Failed to write debug report: {e}", file=sys.stderr)
 
     print(f"✅ {saved} Flüge/Snapshots gespeichert.")
 

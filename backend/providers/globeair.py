@@ -5,7 +5,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from providers.base import Provider
-from common.http import get_html, save_debug
+from common.http import get_html
 from common.types import FlightRecord
 
 GLOBEAIR_URL = "https://www.globeair.com/empty-leg-flights"
@@ -52,7 +52,7 @@ class GlobeAirProvider(Provider):
     def fetch_all(self) -> List[FlightRecord]:
         html = get_html(GLOBEAIR_URL, referer=self.base_url)
         if self.debug:
-            save_debug("globeair.html", html)
+            self.dbg.save("globeair.html", html)
         return self._parse(html)
 
     def _parse(self, html: str) -> List[FlightRecord]:

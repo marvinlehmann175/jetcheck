@@ -1,9 +1,11 @@
 # backend/common/http.py
 import os
-import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
+import time
+
 import requests
+from common.debug import DebugCollector
 
 DEBUG = os.getenv("SCRAPER_DEBUG", "0") == "1"
 
@@ -31,14 +33,35 @@ def save_debug(name: str, text: str) -> None:
     path.write_text(text, encoding="utf-8")
     print(f"🪵 DEBUG saved: {path}")
 
-def get_html(url: str, *, referer: Optional[str] = None, timeout: int = 25) -> str:
-    """GET HTML-Text mit gemeinsamer Session & Standard-Headern."""
-    headers = dict(COMMON_HEADERS)
+def get_html(
+    url: str,
+    *,
+    referer: Optional[str] = None,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: int = 25,
+    dbg: Optional[DebugCollector] = None,
+) -> str:
+    """
+    GET HTML-Text mit gemeinsamer Session & Standard-Headern.
+    - referer: setzt den Referer-Header
+    - headers: erlaubt zusätzliche/überschreibende Header
+    - dbg: optionaler DebugCollector für Timings/Logs
+    """
+    h = dict(COMMON_HEADERS)
     if referer:
-        headers["Referer"] = referer
-    r = SESSION.get(url, headers=headers, timeout=timeout)
-    if DEBUG:
+        h["Referer"] = referer
+    if headers:
+        h.update(headers)
+
+    t0 = time.perf_counter()
+    r = SESSION.get(url, headers=h, timeout=timeout)
+    ms = (time.perf_counter() - t0) * 1000.0
+
+    if dbg and dbg.enabled:
+        dbg.log("HTTP GET", url=url, status=r.status_code, len=len(r.text), ms=round(ms, 1))
+    elif DEBUG:
         print(f"HTTP GET {url} -> {r.status_code}, len={len(r.text)}")
+
     r.raise_for_status()
     return r.text
 
