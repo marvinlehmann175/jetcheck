@@ -109,7 +109,9 @@ export default function FlightCard({ flight }) {
           <div className="flightcard__code">{oCode}</div>
           <div className="flightcard__time">{depTime}</div>
         </div>
-        <div className="flightcard__arrow" aria-hidden>—</div>
+        <div className="flightcard__arrow" aria-hidden>
+          —
+        </div>
         <div className="flightcard__airport flightcard__airport--right">
           <div className="flightcard__name">{dName}</div>
           <div className="flightcard__code">{dCode}</div>
@@ -130,22 +132,38 @@ export default function FlightCard({ flight }) {
           <div className="status-note">{statusText}</div>
         )}
         {showDiscount && (
-          <div className="badge badge--deal">−{Math.round(discount_percent)}%</div>
+          <div className="badge badge--deal">
+            −{Math.round(discount_percent)}%
+          </div>
         )}
         {aircraft && <div className="aircraft">{aircraft}</div>}
       </div>
 
       {/* Footer */}
       <div className="card__footer">
-        <span className="opby">
-          Operated by <strong>{source || "—"}</strong>
-        </span>
         {link_latest ? (
-          <a className="btn btn--primary" href={link_latest} target="_blank" rel="noreferrer">
-            Details / Buchen
+          <a
+            className="btn btn--book"
+            href={link_latest}
+            target="_blank"
+            rel="noreferrer"
+          >
+            ✈ Jetzt buchen
           </a>
         ) : (
-          <button className="btn btn--disabled" disabled>Details</button>
+          <button className="btn btn--disabled" disabled>
+            Details
+          </button>
+        )}
+
+        {source ? (
+          <span className={`opby opby--${source.toLowerCase()}`}>
+            Operated by <strong>{source}</strong>
+          </span>
+        ) : (
+          <span className="opby">
+            Operated by <strong>—</strong>
+          </span>
         )}
       </div>
     </article>

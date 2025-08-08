@@ -224,6 +224,26 @@ body {
 .btn--primary:hover { filter: brightness(1.05); transform: translateY(-1px); }
 .btn--disabled { opacity: .5; cursor: not-allowed; }
 
+.btn--book {
+  border: none;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+  transition: all 0.2s ease;
+}
+
+.btn--book:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(139, 92, 246, 0.55);
+  filter: brightness(1.05);
+}
+
 .badge {
   background: var(--chip);
   border: 1px solid var(--border);
