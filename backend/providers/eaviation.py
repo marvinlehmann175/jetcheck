@@ -30,7 +30,7 @@ class EaviationProvider(Provider):
     name = "eaviation"
 
     def fetch_all(self) -> List[FlightRecord]:
-        html = get_html(EAV_URL, headers={"Referer": EAV_BASE + "/"})
+        html = get_html(EAV_URL, referer=EAV_BASE + "/")
         save_debug("eaviation.html", html)
         return self._parse(html)
 
