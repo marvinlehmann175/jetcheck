@@ -20,6 +20,23 @@ export default function Home() {
   const [sortKey, setSortKey] = useState("departure"); // departure | price | seen
   const [sortDir, setSortDir] = useState("asc");
 
+  // Drawer UI
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilters = useMemo(() => {
+    let n = 0;
+    if (from.trim()) n++;
+    if (to.trim()) n++;
+    if (date.trim()) n++;
+    if (String(maxPrice).trim()) n++;
+    return n;
+  }, [from, to, date, maxPrice]);
+  const resetFilters = () => {
+    setFrom("");
+    setTo("");
+    setDate("");
+    setMaxPrice("");
+  };
+
   // Pagination
   const [page, setPage] = useState(1);
   const pageSize = 12;
@@ -171,34 +188,16 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Controls */}
-      <section className="controls">
-        <input
-          className="input"
-          placeholder="Abflug (Ort/IATA, z. B. IBZ)"
-          value={from}
-          onChange={(e) => setFrom(e.target.value)}
-        />
-        <input
-          className="input"
-          placeholder="Ziel (Ort/IATA, z. B. ZRH)"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-        />
-        <input
-          className="input"
-          type="date"
-          placeholder="Datum (YYYY-MM-DD)"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-        />
-        <input
-          className="input"
-          type="number"
-          placeholder="Max. Preis (€)"
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(e.target.value)}
-        />
+      {/* Controls Top Bar (Sort + Filter Button) */}
+      <section className="controls-bar">
+        <button
+          className="btn btn-filter"
+          onClick={() => setShowFilters(true)}
+          aria-expanded={showFilters ? "true" : "false"}
+          aria-controls="filters-drawer"
+        >
+          🔎 Filter {activeFilters > 0 ? `(${activeFilters})` : ""}
+        </button>
 
         <div className="selects">
           <select
@@ -220,6 +219,88 @@ export default function Home() {
           </select>
         </div>
       </section>
+
+      {/* Drawer + Overlay */}
+      {showFilters && (
+        <div
+          className="filters-overlay"
+          onClick={() => setShowFilters(false)}
+          aria-hidden="true"
+        />
+      )}
+      <aside
+        id="filters-drawer"
+        className={`filters-drawer ${showFilters ? "open" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="filters-title"
+      >
+        <div className="filters-header">
+          <h2 id="filters-title">Filter</h2>
+          <button className="btn btn-close" onClick={() => setShowFilters(false)} aria-label="Schließen">
+            ✕
+          </button>
+        </div>
+
+        <form
+          className="filters-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setShowFilters(false);
+          }}
+        >
+          <label className="label">
+            Abflug (Ort/IATA)
+            <input
+              className="input"
+              placeholder="z. B. IBZ"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+
+          <label className="label">
+            Ziel (Ort/IATA)
+            <input
+              className="input"
+              placeholder="z. B. ZRH"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
+
+          <label className="label">
+            Datum
+            <input
+              className="input"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </label>
+
+          <label className="label">
+            Max. Preis (€)
+            <input
+              className="input"
+              type="number"
+              inputMode="numeric"
+              placeholder="z. B. 15000"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+            />
+          </label>
+
+          <div className="filters-actions">
+            <button type="button" className="btn btn-secondary" onClick={resetFilters}>
+              Zurücksetzen
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Anwenden
+            </button>
+          </div>
+        </form>
+      </aside>
 
       <section className="content">
         {loading && (

@@ -9,6 +9,7 @@
    7) Buttons, Badges, Pager, Notices
    8) Flight Card (v2)
    9) Footer
+   10) Filter Drawer (mobile)
    ===================================================== */
 
 /* ---------------------------------
@@ -421,3 +422,122 @@ body {
 .footer .sep { opacity: .4; }
 .footer a { color: var(--text); text-decoration: none; border-bottom: 1px dotted var(--border); }
 .footer a:hover { border-color: var(--text); }
+
+/* ---------------------------------
+   10) Filter Drawer (mobile)
+---------------------------------- */
+
+/* obere Leiste: Filter-Button + Sortierung */
+.controls-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, rgba(11,12,16,.9), rgba(11,12,16,.6));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+
+.btn-filter { font-weight: 700; }
+
+/* kleine Button-Varianten für Drawer-Aktionen */
+.btn-primary {
+  background: linear-gradient(135deg, rgba(139,92,246,.85), rgba(34,211,238,.85));
+  border-color: transparent;
+  color: #fff;
+}
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+
+.btn-secondary {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.btn-close {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+/* Overlay hinter dem Drawer */
+.filters-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 90;
+}
+
+/* Seiten-Drawer */
+.filters-drawer {
+  position: fixed;
+  top: 0;
+  right: -100%;
+  width: min(92vw, 380px);
+  height: 100dvh;
+  background: var(--panel);
+  color: var(--text);
+  z-index: 100;
+  box-shadow: var(--shadow);
+  border-left: 1px solid var(--border);
+  transition: right 220ms ease;
+  display: flex;
+  flex-direction: column;
+}
+.filters-drawer.open { right: 0; }
+
+.filters-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filters-form {
+  padding: 14px 16px;
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.filters-form .input,
+.filters-form .select {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  outline: none;
+  height: 42px;
+  width: 100%;
+}
+
+.filters-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex; justify-content: space-between; gap: 10px;
+  padding-top: 8px; margin-top: 2px;
+  background: linear-gradient(180deg, transparent, rgba(0,0,0,.06));
+}
+
+/* Desktop-Feinschliff */
+@media (min-width: 900px) {
+  .controls-bar { top: 0; }
+  .filters-drawer { width: 420px; }
+}
+
+/* Wenn du die alte .controls-Zeile weiter nutzt, bleibt sie wie gehabt.
+   Die neue Drawer-UI ersetzt sie für mobile UIs, kann aber parallel existieren. */
