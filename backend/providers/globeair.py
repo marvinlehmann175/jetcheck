@@ -1,5 +1,7 @@
+# providers/globeair.py
 import re
-from typing import List
+from typing import List, Optional
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 from providers.base import Provider
@@ -13,8 +15,10 @@ RE_GA_TIME  = re.compile(r"^\s*([0-9: ]+[AP]M)\s*→\s*([0-9: ]+[AP]M)\s*$")
 RE_PCT      = re.compile(r"-?(\d+)%")
 RE_MONEY    = re.compile(r"(\d[\d.,]*)")
 
-def _clean_money(text: str):
-    m = RE_MONEY.search(text or "")
+def _clean_money(text: Optional[str]):
+    if not text:
+        return None
+    m = RE_MONEY.search(text)
     if not m:
         return None
     raw = m.group(1).replace(".", "").replace(",", "")
@@ -26,9 +30,9 @@ def _clean_money(text: str):
         except ValueError:
             return None
 
-def _to_iso_utc_naive(date_str: str | None, time_str: str | None) -> str | None:
+def _to_iso_utc_naive(date_str: Optional[str], time_str: Optional[str]) -> Optional[str]:
+    # Page shows local date/time without TZ; we store as naive-UTC string (as before)
     from dateutil import parser as dtparser
-    import datetime as dt
     if not (date_str and time_str):
         return None
     try:
@@ -40,10 +44,15 @@ def _to_iso_utc_naive(date_str: str | None, time_str: str | None) -> str | None:
 
 class GlobeAirProvider(Provider):
     name = "globeair"
+    base_url = "https://www.globeair.com/"
+
+    def __init__(self, debug: bool | None = None):
+        super().__init__(debug)
 
     def fetch_all(self) -> List[FlightRecord]:
-        html = get_html(GLOBEAIR_URL, referer="https://www.globeair.com/")
-        save_debug("globeair.html", html)
+        html = get_html(GLOBEAIR_URL, referer=self.base_url)
+        if self.debug:
+            save_debug("globeair.html", html)
         return self._parse(html)
 
     def _parse(self, html: str) -> List[FlightRecord]:
@@ -77,7 +86,9 @@ class GlobeAirProvider(Provider):
             arrival_ts   = _to_iso_utc_naive(date_line, arr_time) if arr_time else None
 
             status = "pending"
-            price_current = price_normal = discount_percent = None
+            price_current = None
+            price_normal = None
+            discount_percent = None
             probability = None
             currency = "EUR"
 
@@ -115,7 +126,8 @@ class GlobeAirProvider(Provider):
             link = None
             a0 = col.select_one("a[href]")
             if a0:
-                link = a0.get("href")
+                href = a0.get("href")
+                link = urljoin(self.base_url, href) if href else None
 
             rows.append({
                 "source": self.name,
@@ -132,7 +144,12 @@ class GlobeAirProvider(Provider):
                 "probability": probability,
                 "currency": currency,
                 "link": link,
-                "raw": {"title": title, "date": date_line, "times": time_line, "info": info_line},
+                "raw": {
+                    "title": title,
+                    "date": date_line,
+                    "times": time_line,
+                    "info": info_line
+                },
                 "raw_static": {"operator": "GlobeAir"},
                 "aircraft": None,
             })
