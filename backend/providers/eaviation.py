@@ -1,9 +1,10 @@
 # backend/providers/eaviation.py
 from __future__ import annotations
 
+import os
 import re
 import datetime as dt
-from typing import List, Optional
+from typing import List
 
 from bs4 import BeautifulSoup
 from zoneinfo import ZoneInfo
@@ -16,186 +17,158 @@ from common.types import FlightRecord
 EAVIATION_URL = "https://www.e-aviation.de/leerfluege/"
 BERLIN_TZ = ZoneInfo("Europe/Berlin")
 
-# DOM parsing helpers
-RE_PAREN_CODE = re.compile(r"\(([A-Z0-9]{3,4})\)")
-RE_DATE_ISO = re.compile(r"(\d{4}-\d{2}-\d{2})")
-RE_SEGMENT_CODES = re.compile(r"\b([A-Z0-9]{3})\s*-\s*([A-Z0-9]{3})\b")
+RE_CODE = re.compile(r"\(([A-Z0-9]{3,4})\)")
+RE_DATE_ISO = re.compile(r"(\d{4}-\d{2}-\d{2})")  # "Verfügbar: 2025-08-08"
 
-# Regex fallback (works on the raw HTML even if content is JS-hydrated later)
-# Matches:
-#   <span class="lift__title t-empty-leg-description">
-#     <span>Stuttgart, DE (STR)</span> ... <span>Nuernberg, DE (NUE)</span>
-#   ...
-#   Verfügbar:&nbsp;2025-08-08
-RE_BLOCK = re.compile(
-    r'<span[^>]*class="[^"]*\bt-empty-leg-description\b[^"]*"[^>]*>\s*'
-    r'<span>(?P<left>[^<]+)</span>.*?'
-    r'<span>(?P<right>[^<]+)</span>.*?'
-    r'Verfügbar:&nbsp;(?P<date>\d{4}-\d{2}-\d{2})',
-    re.S | re.I
-)
+def _clean_place(text: str) -> str:
+    return re.sub(r"\s*\([^)]+\)\s*", "", (text or "")).strip()
 
-def _clean_place(text: Optional[str]) -> str:
-    if not text:
-        return ""
-    return re.sub(r"\s*\([^)]+\)\s*", "", text).strip()
-
-def _to_utc_midnight(date_iso: str) -> str:
-    y, mth, d = map(int, date_iso.split("-"))
-    local = dt.datetime(y, mth, d, 0, 0, tzinfo=BERLIN_TZ)
+def _date_to_iso_utc(date_iso: str | None) -> str | None:
+    if not date_iso:
+        return None
+    y, m, d = map(int, date_iso.split("-"))
+    local = dt.datetime(y, m, d, 0, 0, tzinfo=BERLIN_TZ)
     return local.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-class EaviationProvider(Provider):
-    name = "eaviation"
-    base_url = EAVIATION_URL
+def _parse_items(html: str, debug_name: str | None = None, debug: bool = False) -> List[FlightRecord]:
+    """
+    Parse E-Aviation/Avinode widget markup into FlightRecords.
+    Works for:
+      - <div class="search-hit-list-item"> ... (widget markup)
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    items = soup.select(".search-hit-list-item")
+    if debug:
+        print(f"EAV items: {len(items)}")
 
-    def __init__(self, debug: bool | None = None):
-        super().__init__(debug)
+    flights: List[FlightRecord] = []
 
-    def fetch_all(self) -> List[FlightRecord]:
-        html = get_html(EAVIATION_URL, referer="https://www.e-aviation.de/")
-        print(html[:2000])
-        if self.debug:
-            save_debug("eaviation.html", html)
+    for item in items:
+        # Route (two spans inside .t-empty-leg-description)
+        route = item.select_one(".t-empty-leg-description")
+        if not route:
+            continue
+        spans = route.find_all("span")
+        if len(spans) < 2:
+            continue
 
-        soup = BeautifulSoup(html, "html.parser")
-        items = soup.select(".search-hit-list-item")
-        if self.debug:
-            print(f"EAV items: {len(items)}")
+        left_txt = spans[0].get_text(strip=True)
+        right_txt = spans[-1].get_text(strip=True)
 
-        flights: List[FlightRecord] = []
+        left_code = (RE_CODE.search(left_txt or "") or [None, None])[1]
+        right_code = (RE_CODE.search(right_txt or "") or [None, None])[1]
 
-        # 1) Try DOM parsing (if SSR is present)
-        if items:
-            flights.extend(self._parse_dom(items))
+        oi = to_iata(left_code) if left_code else None
+        di = to_iata(right_code) if right_code else None
 
-        # 2) Fallback: regex over raw HTML if DOM is empty (CSR only)
-        if not flights:
-            flights.extend(self._parse_regex(html))
-
-        return flights
-
-    def _parse_dom(self, items) -> List[FlightRecord]:
-        out: List[FlightRecord] = []
-        for item in items:
-            route = item.select_one(".t-empty-leg-description") or item.select_one(".lift__title.t-empty-leg-description")
-            if not route:
-                continue
-
-            spans = route.find_all("span")
-            if len(spans) < 2:
-                continue
-
-            left_txt = spans[0].get_text(strip=True)
-            right_txt = spans[-1].get_text(strip=True)
-
-            # Codes in parentheses
-            left_code = (RE_PAREN_CODE.search(left_txt or "") or [None, None])[1]
-            right_code = (RE_PAREN_CODE.search(right_txt or "") or [None, None])[1]
-
-            oi = to_iata(left_code) if left_code else None
-            di = to_iata(right_code) if right_code else None
-
-            # Fallback: segment table like "STR - NUE"
-            if not (oi and di):
-                seg = item.select_one(".itinerary__segments")
-                if seg:
-                    m = RE_SEGMENT_CODES.search(seg.get_text(" ", strip=True))
-                    if m:
-                        seg_o, seg_d = m.group(1), m.group(2)
-                        oi = oi or to_iata(seg_o) or seg_o
-                        di = di or to_iata(seg_d) or seg_d
-
-            # Date paragraph containing "Verfügbar"
-            departure_ts = None
-            for p in item.select(".search-hit-list-item-details__lift-itinerary p"):
-                txt = p.get_text(" ", strip=True)
-                m = RE_DATE_ISO.search(txt)
-                if "Verfügbar" in txt and m:
-                    departure_ts = _to_utc_midnight(m.group(1))
-                    break
-
-            aircraft = None
-            title_rows = item.select(".lift__title-row .lift__title")
-            if title_rows:
-                for t in title_rows:
-                    if "t-empty-leg-description" in (t.get("class") or []):
-                        continue
-                    aircraft = t.get_text(strip=True)
-                    if aircraft:
-                        break
-
-            if not (oi and di and departure_ts):
-                if self.debug:
-                    print(f"skip (dom) oi={oi} di={di} date={departure_ts} text='{left_txt} → {right_txt}'")
-                continue
-
-            out.append(self._mk_record(oi, di, left_txt, right_txt, departure_ts, aircraft))
-        return out
-
-    def _parse_regex(self, html: str) -> List[FlightRecord]:
-        out: List[FlightRecord] = []
-        for m in RE_BLOCK.finditer(html):
-            left_txt = m.group("left").strip()
-            right_txt = m.group("right").strip()
-            date_iso = m.group("date")
-
-            # Try codes from parentheses in left/right strings
-            left_code = (RE_PAREN_CODE.search(left_txt or "") or [None, None])[1]
-            right_code = (RE_PAREN_CODE.search(right_txt or "") or [None, None])[1]
-
-            oi = to_iata(left_code) if left_code else None
-            di = to_iata(right_code) if right_code else None
-
-            # As regex fallback, also try inline "AAA - BBB" somewhere nearby in HTML (optional)
-            if not (oi and di):
-                # Quick global search; safe since we only fallback when DOM is empty
-                seg = RE_SEGMENT_CODES.search(html)
-                if seg:
-                    oi = oi or to_iata(seg.group(1)) or seg.group(1)
-                    di = di or to_iata(seg.group(2)) or seg.group(2)
-
-            if not (oi and di):
-                if self.debug:
-                    print(f"skip (rx codes) left='{left_txt}' right='{right_txt}'")
-                continue
-
-            dep_utc = _to_utc_midnight(date_iso)
-            out.append(self._mk_record(oi, di, left_txt, right_txt, dep_utc, aircraft=None))
-        if self.debug:
-            print(f"EAV regex hits: {len(out)}")
-        return out
-
-    def _mk_record(
-        self,
-        oi: str,
-        di: str,
-        left_txt: str,
-        right_txt: str,
-        departure_ts: str,
-        aircraft: Optional[str],
-    ) -> FlightRecord:
         origin_name = _clean_place(left_txt)
         dest_name = _clean_place(right_txt)
-        return {
-            "source": self.name,
+
+        # Date paragraph containing "Verfügbar"
+        date_iso = None
+        for p in item.select(".search-hit-list-item-details__lift-itinerary p"):
+            txt = p.get_text(" ", strip=True)
+            if "Verfügbar" in txt:
+                m = RE_DATE_ISO.search(txt)
+                if m:
+                    date_iso = m.group(1)
+                    break
+        departure_ts = _date_to_iso_utc(date_iso) if date_iso else None
+
+        # Aircraft (the next title row after description)
+        ac = None
+        # There are multiple .lift__title-row elements; the non-description one is the aircraft
+        for row in item.select(".lift__title-row"):
+            cls = " ".join(row.get("class", []))
+            # find .lift__title without 't-empty-leg-description'
+            t = row.select_one(".lift__title")
+            if not t:
+                continue
+            if "t-empty-leg-description" in t.get("class", []):
+                continue
+            ac = t.get_text(strip=True)
+            if ac:
+                break
+
+        # Link: their button is JS-driven; fallback to list page
+        link = EAVIATION_URL
+
+        if not (oi and di and departure_ts):
+            if debug:
+                print(f"skip: oi={oi} di={di} date={departure_ts} text='{left_txt} → {right_txt}'")
+            continue
+
+        rec: FlightRecord = {
+            "source": "eaviation",
             "origin_iata": oi,
             "origin_name": origin_name,
             "destination_iata": di,
             "destination_name": dest_name,
             "departure_ts": departure_ts,
-            "arrival_ts": None,
-            "aircraft": aircraft,
+            "arrival_ts": None,  # not provided
+            "aircraft": ac,
             "currency": "EUR",
             "status": "pending",
             "price_current": None,
             "price_normal": None,
             "discount_percent": None,
             "probability": None,
-            "link": EAVIATION_URL,  # button is JS-driven; keep list URL
+            "link": link,
             "raw": {
                 "route_left": left_txt,
                 "route_right": right_txt,
+                "date": date_iso,
             },
-            "raw_static": {"operator": "E-Aviation", "aircraft": aircraft},
+            "raw_static": {"operator": "E-Aviation", "aircraft": ac},
         }
+        flights.append(rec)
+
+    return flights
+
+class EaviationProvider(Provider):
+    name = "eaviation"
+    base_url = EAVIATION_URL
+
+    def fetch_all(self) -> List[FlightRecord]:
+        # 1) Try server HTML
+        html = get_html(EAVIATION_URL)
+        save_debug("eaviation.html", html)
+        flights = _parse_items(html, "eaviation.html", self.debug)
+        if flights:
+            return flights
+
+        # 2) Try to find an Avinode iframe and fetch its src directly
+        soup = BeautifulSoup(html, "html.parser")
+        iframe = soup.select_one('iframe[src*="avinode"], iframe[src*="market"], iframe[src*="widget"]')
+        if iframe and iframe.get("src"):
+            iframe_src = iframe["src"]
+            try:
+                iframe_html = get_html(iframe_src, referer=EAVIATION_URL)
+                save_debug("eaviation_iframe.html", iframe_html)
+                flights = _parse_items(iframe_html, "eaviation_iframe.html", self.debug)
+                if flights:
+                    return flights
+            except Exception as e:
+                if self.debug:
+                    print(f"EAV iframe fetch error: {e}")
+
+        # 3) Optional: headless render via Playwright if enabled
+        if os.getenv("ENABLE_BROWSER", "0") == "1":
+            try:
+                from playwright.sync_api import sync_playwright
+                with sync_playwright() as pw:
+                    browser = pw.chromium.launch(headless=True)
+                    ctx = browser.new_context()
+                    page = ctx.new_page()
+                    page.goto(EAVIATION_URL, wait_until="networkidle", timeout=45000)
+                    rendered = page.content()
+                    browser.close()
+                save_debug("eaviation_rendered.html", rendered)
+                flights = _parse_items(rendered, "eaviation_rendered.html", self.debug)
+                return flights
+            except Exception as e:
+                if self.debug:
+                    print(f"EAV Playwright render error: {e}")
+
+        # Nothing found
+        return []
