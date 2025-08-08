@@ -174,8 +174,8 @@ export default function Home() {
         <input
           className="searchbar__input"
           placeholder="Suche Route… (z. B. Ibiza oder ZRH)"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
         />
       </section>
 
