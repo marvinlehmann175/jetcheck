@@ -196,6 +196,19 @@ def upsert_flight_and_snapshot(rec: Dict[str, Any]) -> int:
     arr = rec.get("arrival_ts")
     if isinstance(arr, dt.datetime):
         arr = iso_utc(arr)
+    # Ensure arrival is strictly after departure; otherwise omit arrival
+    try:
+        if dep and arr:
+            dep_dt = dtparser.isoparse(dep)
+            arr_dt = dtparser.isoparse(arr)
+            # Keep arrival if it is within a reasonable window (e.g., less than 24h after departure)
+            # This avoids dropping arrivals that appear earlier due to time zone differences
+            delta = (arr_dt - dep_dt).total_seconds()
+            if delta <= 0 or delta > 24 * 3600:
+                arr = None
+    except Exception:
+        # If parsing fails for any reason, fall back to dropping arrival to avoid DB constraint errors
+        arr = None
 
     flight_payload = {
         "user_id": SYSTEM_USER_ID,
