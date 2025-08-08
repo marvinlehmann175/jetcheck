@@ -55,7 +55,7 @@ def _guess_iata_from_name(name: str) -> Optional[str]:
     code = to_iata_by_name(name)
     if code:
         return code
-    tokens = re.split(r"[,\\s/–-]+", name.strip())
+    tokens = re.split(r"[,\s/–-]+", name.strip())
     candidates = []
     if tokens:
         candidates.append(tokens[0])

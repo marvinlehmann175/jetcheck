@@ -8,7 +8,7 @@ from common.debug import DebugCollector
 from common.types import FlightRecord
 
 class Provider(ABC):
-    name: str = ""           # z.B. "globeair", "asl"
+    name: str = ""
     base_url: Optional[str] = None
 
     def __init__(self, debug: bool | None = None, debug_dir: str | None = None):
