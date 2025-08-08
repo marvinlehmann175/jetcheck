@@ -7,7 +7,8 @@ from dateutil import parser as dtparser
 from zoneinfo import ZoneInfo
 
 from common.http import SESSION, COMMON_HEADERS, save_debug, DEBUG
-from common.types import Provider
+from providers.base import Provider
+from common.types import FlightRecord
 from common.airports import to_iata, to_names
 
 ASL_BASE = "https://www.aslgroup.eu"

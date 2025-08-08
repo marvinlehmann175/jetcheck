@@ -6,7 +6,8 @@ from typing import Dict, Any, List, Optional
 from bs4 import BeautifulSoup
 
 from common.http import SESSION, COMMON_HEADERS, save_debug, DEBUG
-from common.types import Provider
+from providers.base import Provider
+from common.types import FlightRecord
 from common.airports import to_iata, to_names
 
 GLOBEAIR_URL = "https://www.globeair.com/empty-leg-flights"

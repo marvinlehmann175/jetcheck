@@ -127,7 +127,6 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 18px 20px;
   font-size: 16px;
   outline: none;
   box-shadow: var(--shadow);
