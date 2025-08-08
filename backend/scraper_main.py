@@ -15,6 +15,7 @@ import db  # now safe
 from providers.globeair import GlobeAirProvider
 from providers.asl import ASLProvider
 from providers.eaviation import EaviationProvider
+from providers.callajet import CallaJetProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
 
@@ -54,6 +55,8 @@ def run_provider(name: str, *, debug: bool, debug_dir: str | None):
         return ASLProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "eaviation":
         return EaviationProvider(debug=debug, debug_dir=debug_dir).fetch_all()
+    if name == "callajet":
+        return CallaJetProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     if name == "all":
         # handled by loop
         raise ValueError("use loop")
