@@ -2,13 +2,18 @@ import os
 import sys
 import argparse
 
+# ensure local imports (db.py) work when running this file directly
+sys.path.append(os.path.dirname(__file__))
+
 from dotenv import load_dotenv
+
+import db  # now safe
 
 from providers.globeair import GlobeAirProvider
 from providers.asl import ASLProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
-from backend import db  # relative import works when run from project root; adjust if needed
+
 
 
 def parse_args() -> argparse.Namespace:
