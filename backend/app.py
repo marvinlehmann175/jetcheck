@@ -10,7 +10,8 @@ import json
 load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+# Prefer service role key if present; fall back to SUPABASE_KEY for backward compatibility
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")  # legacy table (kept for compatibility)
 
 # CORS config: either allow all via ALLOWED_ORIGIN="*" or specific list via ALLOWED_ORIGINS
@@ -38,7 +39,8 @@ def handle_preflight():
             resp.headers["Access-Control-Allow-Origin"] = "*"
         elif origin in ALLOWED_ORIGINS:
             resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Vary"] = "Origin"
+            if not ALLOW_ALL and origin in ALLOWED_ORIGINS:
+                resp.headers["Vary"] = "Origin"
         resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
         resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
         return resp
@@ -50,7 +52,7 @@ def add_cors_headers(resp):
         resp.headers["Access-Control-Allow-Origin"] = "*"
     elif origin in ALLOWED_ORIGINS:
         resp.headers["Access-Control-Allow-Origin"] = origin
-    resp.headers["Vary"] = "Origin"
+        resp.headers["Vary"] = "Origin"
     resp.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return resp
@@ -69,7 +71,9 @@ def index():
 
 @app.route("/healthz")
 def healthz():
-    return jsonify({"status": "ok"})
+    ok_env = bool(SUPABASE_URL) and bool(SUPABASE_KEY)
+    status_code = 200 if ok_env else 500
+    return jsonify({"ok": ok_env}), status_code
 
 # NEW: unified endpoint backed by the 'flights_latest' view
 @app.route("/api/flights", methods=["GET", "OPTIONS"])
@@ -125,5 +129,6 @@ def get_asl():
     return jsonify([])
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.getenv("PORT", "5000"))
+    debug = bool(int(os.getenv("FLASK_DEBUG", "0")))
+    app.run(host="0.0.0.0", port=port, debug=debug)

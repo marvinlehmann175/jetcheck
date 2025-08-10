@@ -12,10 +12,9 @@ from dotenv import load_dotenv
 
 import db  # now safe
 
+from supabase import create_client
+
 from providers.globeair import GlobeAirProvider
-from providers.asl import ASLProvider
-from providers.eaviation import EaviationProvider
-from providers.callajet import CallajetProvider
 from common.types import FlightRecord
 from common.airports import build_indexes
 
@@ -25,7 +24,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="JetCheck scraper orchestrator")
     p.add_argument(
         "--provider",
-        choices=["all", "globeair", "asl", "eaviation", "callajet"],
+        choices=["all", "globeair"],
         default=os.getenv("SCRAPER_PROVIDER", "all"),
     )
     p.add_argument(
@@ -50,13 +49,22 @@ def parse_args() -> argparse.Namespace:
 def run_provider(name: str, debug: bool, debug_dir: str | None) -> list[FlightRecord]:
     if name == "globeair":
         return GlobeAirProvider(debug=debug, debug_dir=debug_dir).fetch_all()
-    if name == "asl":
-        return ASLProvider(debug=debug, debug_dir=debug_dir).fetch_all()
-    if name == "eaviation":
-        return EaviationProvider(debug=debug, debug_dir=debug_dir).fetch_all()
-    if name == "callajet":                                        # ⬅️ added
-        return CallajetProvider(debug=debug, debug_dir=debug_dir).fetch_all()
     raise ValueError(f"Unknown provider: {name}")
+
+
+# Helper to refresh flight statuses via Supabase RPC
+def refresh_statuses() -> None:
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        print("⚠️  Skipping status refresh: missing SUPABASE_URL or key", file=sys.stderr)
+        return
+    try:
+        sb = create_client(url, key)
+        sb.rpc("refresh_flight_statuses").execute()
+        print("🧹 Flight statuses refreshed (refresh_flight_statuses).")
+    except Exception as e:
+        print(f"⚠️  Status refresh failed: {e}", file=sys.stderr)
 
 
 def main():
@@ -80,8 +88,7 @@ def main():
     t_start = time.time()
 
     providers = (
-        ["globeair", "asl", "eaviation", "callajet"]
-        if args.provider == "all" else [args.provider]
+        ["globeair"] if args.provider == "all" else [args.provider]
     )
     durations: dict[str, float] = {}
 
@@ -111,7 +118,7 @@ def main():
                 "",
                 "Per-provider counts:",
             ]
-            for k in ["globeair", "asl", "eaviation"]:
+            for k in ["globeair"]:
                 if k in provider_counts:
                     dur = durations.get(k, 0.0)
                     lines.append(f"  - {k}: {provider_counts[k]} (in {dur:.2f}s)")
@@ -151,7 +158,7 @@ def main():
                 "",
                 "Per-provider counts:",
             ]
-            for k in ["globeair", "asl", "eaviation"]:
+            for k in ["globeair"]:
                 if k in provider_counts:
                     dur = durations.get(k, 0.0)
                     lines.append(f"  - {k}: {provider_counts[k]} (in {dur:.2f}s)")
@@ -167,6 +174,7 @@ def main():
         except Exception as e:
             print(f"⚠️  Failed to write debug report: {e}", file=sys.stderr)
 
+    refresh_statuses()
     print(f"✅ {saved} Flüge/Snapshots gespeichert.")
 
 

@@ -1,3 +1,33 @@
-backend/.env
-backend/venv
-frontend/node_modules
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.mypy_cache/
+.pytest_cache/
+
+# Envs & secrets
+.env
+.env.*
+.venv/
+venv/
+backend/venv/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Debug & local artifacts
+scrape_debug/
+tmp/
+tmp_*/
+tmp-*/
+tmp.*
+/tmp/jetcheck/
+
+# Build
+dist/
+build/
