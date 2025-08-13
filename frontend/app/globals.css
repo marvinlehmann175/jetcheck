@@ -430,6 +430,10 @@ body {
 .status-chip--archived { color: #9ca3af; border-color: rgba(156,163,175,.25); }
 .status-chip--departed { color: #9ca3af; border-color: rgba(156,163,175,.25); }
 .status-chip--pending { color: var(--muted); }
+.status-chip--confirmed {
+  color: #3b82f6;
+  border-color: rgba(59,130,246,.35);
+}
 
 /* Keep existing per-source backgrounds */
 
@@ -457,12 +461,22 @@ body {
   z-index: 40;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center; /* zentriert den inneren Container */
   gap: 12px;
   padding: 10px 20px;
   background: transparent;
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(10px);
+}
+
+/* Neuer innerer Container */
+.controls-bar__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 1200px;
 }
 
 .btn-filter { font-weight: 700; }

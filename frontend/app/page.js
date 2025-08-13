@@ -205,33 +205,35 @@ export default function Home() {
 
       {/* Controls Top Bar (Sort + Filter Button) */}
       <section className="controls-bar">
-        <button
-          className="btn btn-filter"
-          onClick={() => setShowFilters(true)}
-          aria-expanded={showFilters ? "true" : "false"}
-          aria-controls="filters-drawer"
-        >
-          🔎 Filter {activeFilters > 0 ? `(${activeFilters})` : ""}
-        </button>
+        <div className="controls-bar__inner">
+          <button
+            className="btn btn-filter"
+            onClick={() => setShowFilters(true)}
+            aria-expanded={showFilters ? "true" : "false"}
+            aria-controls="filters-drawer"
+          >
+            🔎 Filter {activeFilters > 0 ? `(${activeFilters})` : ""}
+          </button>
 
-        <div className="selects">
-          <select
-            className="select"
-            value={sortKey}
-            onChange={(e) => setSortKey(e.target.value)}
-          >
-            <option value="departure">Abflugzeit</option>
-            <option value="price">Preis</option>
-            <option value="seen">Zuletzt gesehen</option>
-          </select>
-          <select
-            className="select"
-            value={sortDir}
-            onChange={(e) => setSortDir(e.target.value)}
-          >
-            <option value="asc">Aufsteigend</option>
-            <option value="desc">Absteigend</option>
-          </select>
+          <div className="selects">
+            <select
+              className="select"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value)}
+            >
+              <option value="departure">Abflugzeit</option>
+              <option value="price">Preis</option>
+              <option value="seen">Zuletzt gesehen</option>
+            </select>
+            <select
+              className="select"
+              value={sortDir}
+              onChange={(e) => setSortDir(e.target.value)}
+            >
+              <option value="asc">Aufsteigend</option>
+              <option value="desc">Absteigend</option>
+            </select>
+          </div>
         </div>
       </section>
 
