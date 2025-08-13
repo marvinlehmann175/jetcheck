@@ -57,14 +57,16 @@ def add_cors_headers(resp):
 @app.route("/")
 def index():
     return (
-        "JetCheck API\n\n"
-        "Welcome! The API is running.\n\n"
-        "Endpoints:\n"
-        "  • /api/flights         (NEW – uses flights_public)\n"
-        "  • /api/globeair        (legacy, old table if still needed)\n"
-        "  • /api/asl             (static JSON if present)\n"
-        "  • /healthz\n"
-    ), 200, {"Content-Type": "text/plain; charset=utf-8"}
+        "<h1>JetCheck API</h1>"
+        "<p>Welcome! The API is running.</p>"
+        "<h2>Endpoints:</h2>"
+        "<ul>"
+        "  <li><a href='/api/flights'>/api/flights</a> (NEW – uses flights_public)</li>"
+        "  <li><a href='/api/globeair'>/api/globeair</a> (legacy, old table if still needed)</li>"
+        "  <li><a href='/api/asl'>/api/asl</a> (static JSON if present)</li>"
+        "  <li><a href='/healthz'>/healthz</a></li>"
+        "</ul>"
+    ), 200, {"Content-Type": "text/html; charset=utf-8"}
 
 @app.route("/healthz")
 def healthz():
@@ -82,7 +84,6 @@ def get_flights():
         return jsonify({"error": "Supabase client not configured"}), 500
 
     try:
-        # Base query (flights_public already excludes past/unavailable flights)
         q = supabase.table("flights_public").select(
             "id,source,origin_iata,origin_name,destination_iata,destination_name,"
             "departure_ts,arrival_ts,aircraft,"
@@ -90,55 +91,51 @@ def get_flights():
             "currency_effective,status_latest,link_latest,last_seen_at"
         )
 
-        # ---- Filters (optional) ----
+        # ---- Filters ----
         qstr = (request.args.get("q") or "").strip()
         from_q = (request.args.get("from") or "").strip()
-        to_q = (request.args.get("to") or "").strip()
+        to_q   = (request.args.get("to") or "").strip()
         date_q = (request.args.get("date") or "").strip()        # YYYY-MM-DD
         max_price_q = (request.args.get("maxPrice") or "").strip()
         status_q = (request.args.get("status") or "").strip().lower()  # available|pending
 
-        # Text search: use ilike with *term* pattern (PostgREST accepts * as wildcard via client libs)
         if qstr:
-            pat = f"*{qstr}*"
+            pat = f"%{qstr}%"
             q = q.or_(
                 f"origin_name.ilike.{pat},destination_name.ilike.{pat},"
                 f"origin_iata.ilike.{pat},destination_iata.ilike.{pat}",
-                referenced_table="flights_public"
+                reference_table="flights_public"
             )
 
         if from_q:
-            pat = f"*{from_q}*"
+            pat = f"%{from_q}%"
             q = q.or_(
                 f"origin_name.ilike.{pat},origin_iata.ilike.{pat}",
-                referenced_table="flights_public"
+                reference_table="flights_public"
             )
 
         if to_q:
-            pat = f"*{to_q}*"
+            pat = f"%{to_q}%"
             q = q.or_(
                 f"destination_name.ilike.{pat},destination_iata.ilike.{pat}",
-                referenced_table="flights_public"
+                reference_table="flights_public"
             )
 
-        # Date exact (use a day window instead of ::date cast)
         if date_q:
             start = f"{date_q}T00:00:00Z"
             end   = f"{date_q}T23:59:59Z"
             q = q.filter("departure_ts", "gte", start).filter("departure_ts", "lte", end)
 
-        # Max price: accept either current or normal within budget
         if max_price_q:
             try:
                 maxv = int(float(max_price_q))
                 q = q.or_(
                     f"price_current.lte.{maxv},price_normal.lte.{maxv}",
-                    referenced_table="flights_public"
+                    reference_table="flights_public"
                 )
             except ValueError:
                 pass
 
-        # Status (available|pending) — flights_public already hides unavailable
         if status_q in ("available", "pending"):
             q = q.eq("status_latest", status_q)
 
@@ -149,11 +146,11 @@ def get_flights():
 
         sort_map = {
             "departure": "departure_ts",
-            "price": "price_current",   # NULLS LAST by default in client; keep nulls_first=False
+            "price": "price_current",
             "seen": "last_seen_at",
         }
         sort_col = sort_map.get(sort, "departure_ts")
-        q = q.order(sort_col, desc=desc, nulls_first=False)
+        q = q.order(sort_col, desc=desc, nullsfirst=False)
 
         # ---- Limit ----
         try:
