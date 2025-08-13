@@ -44,6 +44,18 @@ def _iso_utc(dt_obj: dt.datetime) -> str:
         .replace("+00:00", "Z")
     )
 
+def _u(s: Optional[str]) -> Optional[str]:
+    return s.strip() if isinstance(s, str) and s.strip() else None
+
+def _upper3(s: Optional[str]) -> Optional[str]:
+    s = _u(s)
+    return s.upper() if s else None
+
+_ALLOWED_CURRENCIES = {"EUR", "USD", "GBP"}
+def _norm_currency(c: Optional[str]) -> str:
+    c = (c or "EUR").upper()
+    return c if c in _ALLOWED_CURRENCIES else "EUR"
+
 
 def _normalize_dep_arr(dep: Optional[str], arr: Optional[str]) -> tuple[Optional[str], Optional[str]]:
     """
@@ -117,19 +129,22 @@ def upsert_flight_and_snapshot(rec: FlightRecord) -> int:
     # Normalize status to our 3-status model BEFORE writing
     status_norm = _norm_status(rec.get("status"), price_current)
 
+    origin_iata = _upper3(rec.get("origin_iata"))
+    destination_iata = _upper3(rec.get("destination_iata"))
+
     flight_payload = {
         "user_id": SYSTEM_USER_ID,
-        "source": rec["source"],
-        "origin_iata": rec["origin_iata"],
-        "origin_name": rec.get("origin_name"),
-        "destination_iata": rec["destination_iata"],
-        "destination_name": rec.get("destination_name"),
+        "source": _u(rec["source"]) or "unknown",
+        "origin_iata": origin_iata,
+        "origin_name": _u(rec.get("origin_name")),
+        "destination_iata": destination_iata,
+        "destination_name": _u(rec.get("destination_name")),
         "departure_ts": dep,
         "arrival_ts": arr,
-        "aircraft": rec.get("aircraft"),
-        "link": rec.get("link"),
-        "currency": rec.get("currency", "EUR"),
-        "status": status_norm,  # normalized here
+        "aircraft": _u(rec.get("aircraft")),
+        "link": _u(rec.get("link")),
+        "currency": _norm_currency(rec.get("currency")),
+        "status": status_norm,
         "probability": rec.get("probability"),
         "raw_static": rec.get("raw_static"),
     }
@@ -149,9 +164,9 @@ def upsert_flight_and_snapshot(rec: FlightRecord) -> int:
         "flight_id": flight_id,
         "price_current": price_current,
         "price_normal": price_normal,
-        "currency": rec.get("currency", "EUR"),
-        "status": status_norm,  # snapshot mirrors normalized status
-        "link": rec.get("link"),
+        "currency": _norm_currency(rec.get("currency")),
+        "status": status_norm,
+        "link": _u(rec.get("link")),
         "raw": rec.get("raw"),
     }
     supabase.table("flight_snapshots").insert(snap_payload).execute()
