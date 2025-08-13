@@ -42,8 +42,8 @@ function timeAgo(ts) {
   if (!ts) return null;
   const diffMs = Date.now() - new Date(ts).getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "gerade eben";
-  if (diffMin < 60) return `vor ${diffMin} Min`;
+  if (diffMin < 1) return "now";
+  if (diffMin < 60) return `${diffMin} Min ago`;
   const diffH = Math.floor(diffMin / 60);
   if (diffH < 24) return `vor ${diffH} Std`;
   const diffD = Math.floor(diffH / 24);
@@ -125,39 +125,54 @@ export default function FlightCard({ flight }) {
         </div>
       </div>
 
-      {/* Preis & Extras */}
-      <div className="flightcard__pricing">
-        {priceLabel && (
-          <div className="price">
-            {priceLabel}
-            {normalPriceLabel && (
-              <span className="price--strike">{normalPriceLabel}</span>
+      {/* Preis / CTA / Extras */}
+      {/* Preis / CTA ODER Pending — immer mit gleicher Box-Optik */}
+      {priceLabel ? (
+        <div className="info-box">
+          <div className="info-main">
+            <div className="info-title">{priceLabel}</div>
+            {(normalPriceLabel || showDiscount) && (
+              <div className="info-sub">
+                {normalPriceLabel && (
+                  <span className="info-label"><span className="info-compare">{normalPriceLabel}</span></span>
+                )}
+                {showDiscount && (
+                  <span className="info-badge">
+                    −{Math.round(discount_percent)}%
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-        {showDiscount && (
-          <div className="badge badge--deal">
-            −{Math.round(discount_percent)}%
-          </div>
-        )}
-        {aircraft && <div className="aircraft">{aircraft}</div>}
-      </div>
 
-      {/* Footer-Actions */}
-      <div className="card__footer">
-        <div className="footer-actions">
-          <a
-            className={`btn btn--book${link_latest ? "" : " btn--disabled"}`}
-            href={link_latest || "#"}
-            target={link_latest ? "_blank" : undefined}
-            rel={link_latest ? "noreferrer" : undefined}
-            aria-disabled={!link_latest}
-          >
-            ✈ Jetzt buchen
-          </a>
-          <button className="btn btn--secondary">Details</button>
+          {link_latest && (
+            <a
+              className="btn btn--book btn--book-inline"
+              href={link_latest}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Jetzt buchen"
+            >
+              ✈ Book now
+            </a>
+          )}
         </div>
-      </div>
+      ) : (
+        <div className="info-box info-box--stack">
+          <div className="info-title">Flight not confirmed yet</div>
+
+          {Number.isFinite(flight?.probability) && (
+            <div className="info-sub">
+              <span className="info-label">Probability</span>
+              <span className="info-badge info-badge--prob">
+                ~{Math.round(Number(flight.probability) * 100)}%
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {aircraft && <div className="aircraft">{aircraft}</div>}
 
       {/* Meta unter dem Footer */}
       <div className="card__meta">
@@ -168,7 +183,9 @@ export default function FlightCard({ flight }) {
         </div>
         <div className="meta-right">
           {last_seen_at && (
-            <span className="meta-updated">updated {timeAgo(last_seen_at)}</span>
+            <span className="meta-updated">
+              updated {timeAgo(last_seen_at)}
+            </span>
           )}
         </div>
       </div>

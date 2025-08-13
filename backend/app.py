@@ -82,10 +82,11 @@ def get_flights():
             supabase
             .table("flights_public")
             .select(
-                "id,source,origin_iata,origin_name,destination_iata,destination_name,"
-                "departure_ts,arrival_ts,aircraft,"
-                "price_current,price_normal,discount_percent,"
-                "currency_effective,status_latest,link_latest,last_seen_at"
+            "id,source,origin_iata,origin_name,destination_iata,destination_name,"
+            "departure_ts,arrival_ts,aircraft,"
+            "price_current,price_normal,discount_percent,"
+            "currency_effective,status_latest,link_latest,last_seen_at,"
+            "probability"
             )
             .order("departure_ts", desc=False, nullsfirst=False)
             .limit(500)

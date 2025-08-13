@@ -223,10 +223,14 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 8px 12px;         /* slightly tighter for better fit */
   outline: none;
-  height: 42px;
+  height: auto;              /* allow natural vertical size */
+  min-height: 42px;          /* keep minimum height */
+  line-height: 1.2;          /* avoid clipping in Safari */
   width: 100%;
+  -webkit-appearance: none;  /* normalize select rendering */
+  appearance: none;
 }
 .input::placeholder {
   color: var(--muted);
@@ -240,6 +244,14 @@ body {
   display: flex;
   gap: 10px;
   align-items: center;
+}
+
+.controls-bar .selects {
+  flex-wrap: wrap;
+}
+.controls-bar .selects .select {
+  flex: 0 0 160px;   /* don't shrink; give a sensible width */
+  min-width: 140px;
 }
 
 /* ---------------------------------
@@ -479,23 +491,103 @@ body {
 }
 
 /* Preis & Status */
+
+
 .flightcard__pricing {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
-.price {
-  font-weight: 800;
+/* Einheitliche Info-Box (für Preis/CTA & Pending) */
+.info-box {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between; /* Text links, CTA rechts */
+  gap: 8px;
+  padding: 12px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed var(--border);
 }
-.price--strike {
-  opacity: 0.6;
+
+.info-box > * {
+  margin: 0;
+}
+
+/* Stack-Variante (für Pending ohne CTA, Text untereinander) */
+.info-box--stack {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.info-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;          /* tighter spacing between title & sub */
+  min-width: 0;      /* nicer wrap */
+  margin-bottom: 0;  /* no extra bottom gap to keep boxes consistent */
+}
+
+.info-title {
+  /* gleiche Typo wie Pending-Titel – bewusst ohne „Riesengröße“ */
+  font-weight: 700;
+  color: var(--text);
+  font-size: 16px;
+  letter-spacing: .2px;
+  margin: 0;
+}
+
+.info-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.info-title + .info-sub {
+  margin-top: 0;
+}
+
+.info-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .2px;
+  color: var(--muted);
+  opacity: .95;
+}
+
+.info-compare {
+  opacity: .6;
   text-decoration: line-through;
   font-weight: 600;
-  font-size: 0.95em;
+}
+
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  background: rgba(16,185,129,.12);
+  border: 1px solid rgba(16,185,129,.35);
+  color: var(--ok);
+}
+
+.info-badge--prob {
+  background: rgba(34,211,238,.12);   /* brand-2 tint */
+  border-color: rgba(34,211,238,.35);
+  color: var(--brand-2);
+}
+
+/* CTA kompakt in der Zeile, auf Mobile vollbreit */
+.btn--book-inline { white-space: nowrap; }
+@media (max-width: 640px) {
+  .info-box { flex-direction: column; align-items: stretch; }
+  .btn--book-inline { width: 100%; text-align: center; }
 }
 
 /* Status-Note kleiner */
@@ -559,7 +651,7 @@ body {
   opacity: 0.95;
 }
 .chip--status {
-  font-weight: 700;
+  font-weight: 800;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
 }
@@ -576,9 +668,6 @@ body {
 .status-chip--pending {
   color: var(--muted);
 }
-
-/* Keep existing per-source backgrounds */
-
 /* ---------------------------------
    9) Footer
 ---------------------------------- */

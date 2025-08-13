@@ -21,15 +21,14 @@ export const metadata = {
   }
 };
 
-// ✅ Put themeColor here
 export const viewport = {
   themeColor: "#0b0c10",
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="de">
-      <body>{children}</body>
+    <html lang="de" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
     </html>
   );
 }

@@ -21,6 +21,55 @@ export default function Home() {
   const [sortKey, setSortKey] = useState("departure"); // departure | price | seen
   const [sortDir, setSortDir] = useState("asc");
 
+  // Unique airports: show "IATA — Name", value=IATA (stable & short)
+  const departureOptions = useMemo(() => {
+    const set = new Map(); // key by IATA
+    for (const f of flights) {
+      const code = (f.origin_iata || "").toUpperCase();
+      if (!code) continue;
+      if (
+        status &&
+        String(f.status_latest ?? f.status ?? "").toLowerCase() !==
+          status.toLowerCase()
+      )
+        continue;
+      // If a destination is chosen, only include origins that actually pair with it
+      if (to) {
+        const destCode = to.toUpperCase();
+        if ((f.destination_iata || "").toUpperCase() !== destCode) continue;
+      }
+      const name = f.origin_name || code;
+      if (!set.has(code)) set.set(code, `${code} — ${name}`);
+    }
+    return Array.from(set, ([value, label]) => ({ value, label })).sort(
+      (a, b) => a.label.localeCompare(b.label)
+    );
+  }, [flights, status, to]);
+
+  const destinationOptions = useMemo(() => {
+    const set = new Map(); // key by IATA
+    for (const f of flights) {
+      const code = (f.destination_iata || "").toUpperCase();
+      if (!code) continue;
+      if (
+        status &&
+        String(f.status_latest ?? f.status ?? "").toLowerCase() !==
+          status.toLowerCase()
+      )
+        continue;
+      // If a departure is chosen, only include destinations reachable from it
+      if (from) {
+        const depCode = from.toUpperCase();
+        if ((f.origin_iata || "").toUpperCase() !== depCode) continue;
+      }
+      const name = f.destination_name || code;
+      if (!set.has(code)) set.set(code, `${code} — ${name}`);
+    }
+    return Array.from(set, ([value, label]) => ({ value, label })).sort(
+      (a, b) => a.label.localeCompare(b.label)
+    );
+  }, [flights, status, from]);
+
   // Drawer UI
   const [showFilters, setShowFilters] = useState(false);
   const activeFilters = useMemo(() => {
@@ -84,64 +133,64 @@ export default function Home() {
     return Number.isFinite(val) ? val : Number.POSITIVE_INFINITY;
   };
 
-  const filtered = useMemo(() => {
-    const qLower = q.trim().toLowerCase();
-    const fromLower = from.trim().toLowerCase();
-    const toLower = to.trim().toLowerCase();
-    const dateNorm = date.trim(); // YYYY-MM-DD
+const filtered = useMemo(() => {
+  const qLower = q.trim().toLowerCase();
+  const dateNorm = date.trim(); // YYYY-MM-DD
 
-    return (flights || []).filter((f) => {
-      const oName = (f.origin_name || "").toLowerCase();
-      const dName = (f.destination_name || "").toLowerCase();
-      const oIata = (f.origin_iata || "").toLowerCase();
-      const dIata = (f.destination_iata || "").toLowerCase();
-      const depTs = f.departure_ts ? new Date(f.departure_ts).getTime() : 0;
-      if (depTs && depTs < Date.now()) return false;
+  return (flights || []).filter((f) => {
+    const oName = (f.origin_name || "").toLowerCase();
+    const dName = (f.destination_name || "").toLowerCase();
+    const oIataLower = (f.origin_iata || "").toLowerCase();
+    const dIataLower = (f.destination_iata || "").toLowerCase();
 
-      // Textsuche über beide Orte + IATA
-      if (
-        qLower &&
-        !(
-          oName.includes(qLower) ||
-          dName.includes(qLower) ||
-          oIata.includes(qLower) ||
-          dIata.includes(qLower)
-        )
-      ) {
-        return false;
+    const depTs = f.departure_ts ? new Date(f.departure_ts).getTime() : 0;
+    if (depTs && depTs < Date.now()) return false;
+
+    // Free-text search over names + IATA (substring)
+    if (
+      qLower &&
+      !(
+        oName.includes(qLower) ||
+        dName.includes(qLower) ||
+        oIataLower.includes(qLower) ||
+        dIataLower.includes(qLower)
+      )
+    ) {
+      return false;
+    }
+
+    // Exact IATA match for dropdowns
+    const oIata = (f.origin_iata || "").toUpperCase();
+    const dIata = (f.destination_iata || "").toUpperCase();
+    if (from && oIata !== from.toUpperCase()) return false;
+    if (to && dIata !== to.toUpperCase()) return false;
+
+    if (dateNorm) {
+      const depDate = (f.departure_ts || "").slice(0, 10); // YYYY-MM-DD
+      if (depDate !== dateNorm) return false;
+    }
+
+    if (maxPrice) {
+      const max = Number(maxPrice);
+      if (!Number.isNaN(max)) {
+        const p =
+          typeof f.price_current === "number"
+            ? f.price_current
+            : typeof f.price_normal === "number"
+            ? f.price_normal
+            : Number.POSITIVE_INFINITY;
+        if (p > max) return false;
       }
+    }
 
-      if (
-        fromLower &&
-        !(oName.includes(fromLower) || oIata.includes(fromLower))
-      ) {
-        return false;
-      }
-      if (toLower && !(dName.includes(toLower) || dIata.includes(toLower))) {
-        return false;
-      }
+    if (status) {
+      const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
+      if (s !== status.toLowerCase()) return false;
+    }
 
-      if (dateNorm) {
-        const depDate = (f.departure_ts || "").slice(0, 10); // YYYY-MM-DD
-        if (depDate !== dateNorm) return false;
-      }
-
-      if (maxPrice) {
-        const max = Number(maxPrice);
-        if (!Number.isNaN(max)) {
-          const p = priceToNumber(f.price_current, f.price_normal);
-          if (p > max) return false;
-        }
-      }
-
-      if (status) {
-        const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
-        if (s !== status.toLowerCase()) return false;
-      }
-
-      return true;
-    });
-  }, [flights, q, from, to, date, maxPrice, status]);
+    return true;
+  });
+}, [flights, q, from, to, date, maxPrice, status]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -191,12 +240,12 @@ export default function Home() {
       </header>
 
       <section className="hero">
-        <h1>Exklusive Leerflüge in Echtzeit</h1>
-        <p>Finde verfügbare Empty Legs mit nur einem Klick.</p>
+        <h1>Exclusive Empty Legs in Real Time</h1>
+        <p>Find available empty legs with just one click.</p>
         <div className="searchbar">
           <input
             className="searchbar__input"
-            placeholder="Suche… (Ort oder IATA, z. B. Ibiza / IBZ)"
+            placeholder="Search for (Location or IATA, e.g. Ibiza / IBZ)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -221,17 +270,17 @@ export default function Home() {
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value)}
             >
-              <option value="departure">Abflugzeit</option>
-              <option value="price">Preis</option>
-              <option value="seen">Zuletzt gesehen</option>
+              <option value="departure">Departure Time</option>
+              <option value="price">Price</option>
+              <option value="seen">Last Seen</option>
             </select>
             <select
               className="select"
               value={sortDir}
               onChange={(e) => setSortDir(e.target.value)}
             >
-              <option value="asc">Aufsteigend</option>
-              <option value="desc">Absteigend</option>
+              <option value="asc">Ascending</option>
+              <option value="desc">Descending</option>
             </select>
           </div>
         </div>
@@ -253,11 +302,11 @@ export default function Home() {
         aria-labelledby="filters-title"
       >
         <div className="filters-header">
-          <h2 id="filters-title">Filter</h2>
+          <h2 id="filters-title">Filters</h2>
           <button
             className="btn btn-close"
             onClick={() => setShowFilters(false)}
-            aria-label="Schließen"
+            aria-label="Close"
           >
             ✕
           </button>
@@ -277,33 +326,63 @@ export default function Home() {
               value={status}
               onChange={(e) => setStatus(e.target.value)}
             >
-              <option value="">Alle</option>
+              <option value="">All</option>
               <option value="available">Available</option>
               <option value="pending">Pending</option>
             </select>
           </label>
           <label className="label">
-            Abflug (Ort/IATA)
-            <input
-              className="input"
-              placeholder="z. B. IBZ"
+            Departure (City/IATA)
+            <select
+              className="select"
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
-            />
+              onChange={(e) => {
+                setFrom(e.target.value);
+                // When changing departure, keep destination only if still valid
+                if (e.target.value && to) {
+                  const stillValid = destinationOptions.some(
+                    (o) => o.value === to
+                  );
+                  if (!stillValid) setTo("");
+                }
+              }}
+            >
+              <option value="">Any</option>
+              {departureOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="label">
-            Ziel (Ort/IATA)
-            <input
-              className="input"
-              placeholder="z. B. ZRH"
+            Destination (City/IATA)
+            <select
+              className="select"
               value={to}
-              onChange={(e) => setTo(e.target.value)}
-            />
+              onChange={(e) => {
+                setTo(e.target.value);
+                // When changing destination, keep departure only if still valid
+                if (e.target.value && from) {
+                  const stillValid = departureOptions.some(
+                    (o) => o.value === from
+                  );
+                  if (!stillValid) setFrom("");
+                }
+              }}
+            >
+              <option value="">Any</option>
+              {destinationOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="label">
-            Datum
+            Date
             <input
               className="input"
               type="date"
@@ -313,12 +392,12 @@ export default function Home() {
           </label>
 
           <label className="label">
-            Max. Preis (€)
+            Max Price (€)
             <input
               className="input"
               type="number"
               inputMode="numeric"
-              placeholder="z. B. 15000"
+              placeholder="e.g. 15000"
               value={maxPrice}
               onChange={(e) => setMaxPrice(e.target.value)}
             />
@@ -330,10 +409,10 @@ export default function Home() {
               className="btn btn-secondary"
               onClick={resetFilters}
             >
-              Zurücksetzen
+              Reset
             </button>
             <button type="submit" className="btn btn-primary">
-              Anwenden
+              Apply
             </button>
           </div>
         </form>
@@ -355,9 +434,7 @@ export default function Home() {
         {!loading && !error && (
           <>
             {sorted.length === 0 ? (
-              <div className="notice">
-                Keine Flüge für die aktuelle Filterung.
-              </div>
+<div className="notice">No flights for the current filters.</div>
             ) : (
               <>
                 <div className="grid">
@@ -372,17 +449,17 @@ export default function Home() {
                     disabled={currentPage <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    ◀︎ Zurück
+                    ◀︎ Back
                   </button>
                   <div className="pager__info">
-                    Seite {currentPage} / {totalPages} · {total} Ergebnisse
+                    Page {currentPage} / {totalPages} · {total} results
                   </div>
                   <button
                     className="btn"
                     disabled={currentPage >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    Weiter ▶︎
+                    Next ▶︎
                   </button>
                 </div>
               </>
