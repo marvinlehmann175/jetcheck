@@ -89,17 +89,17 @@ export default function FlightCard({ flight }) {
 
   const statusText =
     status_latest?.toLowerCase() === "pending"
-      ? "Flight not yet confirmed"
+      ? "Pending"
       : status_latest || "";
 
   return (
     <article className="card flightcard">
       {/* Kopfzeile */}
       <div className="flightcard__toprow">
-        <div className="flightcard__date">{depDate}</div>
+        <div className="chip chip--date">{depDate}</div>
         {statusText && (
           <div
-            className={`status-chip status-chip--${String(
+            className={`chip chip--status status-chip status-chip--${String(
               status_latest || ""
             ).toLowerCase()}`}
           >
@@ -125,17 +125,15 @@ export default function FlightCard({ flight }) {
         </div>
       </div>
 
-      {/* Preis & Status */}
+      {/* Preis & Extras */}
       <div className="flightcard__pricing">
-        {priceLabel ? (
+        {priceLabel && (
           <div className="price">
             {priceLabel}
             {normalPriceLabel && (
               <span className="price--strike">{normalPriceLabel}</span>
             )}
           </div>
-        ) : (
-          <div className="status-note">{statusText}</div>
         )}
         {showDiscount && (
           <div className="badge badge--deal">
@@ -145,33 +143,34 @@ export default function FlightCard({ flight }) {
         {aircraft && <div className="aircraft">{aircraft}</div>}
       </div>
 
-      {/* Footer */}
+      {/* Footer-Actions */}
       <div className="card__footer">
-        {link_latest ? (
+        <div className="footer-actions">
           <a
-            className="btn btn--book"
-            href={link_latest}
-            target="_blank"
-            rel="noreferrer"
+            className={`btn btn--book${link_latest ? "" : " btn--disabled"}`}
+            href={link_latest || "#"}
+            target={link_latest ? "_blank" : undefined}
+            rel={link_latest ? "noreferrer" : undefined}
+            aria-disabled={!link_latest}
           >
             ✈ Jetzt buchen
           </a>
-        ) : (
-          <button className="btn btn--disabled" disabled>
-            Details
-          </button>
-        )}
+          <button className="btn btn--secondary">Details</button>
+        </div>
+      </div>
 
-        <span className={`opby opby--${(source || "").toLowerCase()}`}>
-          <span>
+      {/* Meta unter dem Footer */}
+      <div className="card__meta">
+        <div className="meta-left">
+          <span className={`opby-text opby--${(source || "").toLowerCase()}`}>
             Operated by <strong>{source || "—"}</strong>
           </span>
+        </div>
+        <div className="meta-right">
           {last_seen_at && (
-            <span className="opby__updated">
-              updated {timeAgo(last_seen_at)}
-            </span>
+            <span className="meta-updated">updated {timeAgo(last_seen_at)}</span>
           )}
-        </span>
+        </div>
       </div>
     </article>
   );
