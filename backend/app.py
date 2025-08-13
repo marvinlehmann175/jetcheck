@@ -82,7 +82,7 @@ def get_flights():
         return jsonify({"error": "Supabase client not configured"}), 500
 
     try:
-        # Base query from view that already hides unavailable & past flights
+        # Base query (flights_public already excludes past/unavailable flights)
         q = supabase.table("flights_public").select(
             "id,source,origin_iata,origin_name,destination_iata,destination_name,"
             "departure_ts,arrival_ts,aircraft,"
@@ -94,49 +94,51 @@ def get_flights():
         qstr = (request.args.get("q") or "").strip()
         from_q = (request.args.get("from") or "").strip()
         to_q = (request.args.get("to") or "").strip()
-        date_q = (request.args.get("date") or "").strip()  # YYYY-MM-DD
+        date_q = (request.args.get("date") or "").strip()        # YYYY-MM-DD
         max_price_q = (request.args.get("maxPrice") or "").strip()
         status_q = (request.args.get("status") or "").strip().lower()  # available|pending
 
-        # Text search: origin/destination name or IATA
-        # Use OR filter to combine ilike across columns (PostgREST syntax)
+        # Text search: use ilike with *term* pattern (PostgREST accepts * as wildcard via client libs)
         if qstr:
-            pattern = f"%{qstr}%"
+            pat = f"*{qstr}*"
             q = q.or_(
-                "origin_name.ilike.%{p},destination_name.ilike.%{p},"
-                "origin_iata.ilike.%{p},destination_iata.ilike.%{p}".format(p=qstr),
-                referenced_table="flights_public"  # required by supabase-py>=2.0
+                f"origin_name.ilike.{pat},destination_name.ilike.{pat},"
+                f"origin_iata.ilike.{pat},destination_iata.ilike.{pat}",
+                referenced_table="flights_public"
             )
 
         if from_q:
-            pat = f"%{from_q}%"
+            pat = f"*{from_q}*"
             q = q.or_(
-                "origin_name.ilike.%{p},origin_iata.ilike.%{p}".format(p=from_q),
+                f"origin_name.ilike.{pat},origin_iata.ilike.{pat}",
                 referenced_table="flights_public"
             )
 
         if to_q:
-            pat = f"%{to_q}%"
+            pat = f"*{to_q}*"
             q = q.or_(
-                "destination_name.ilike.%{p},destination_iata.ilike.%{p}".format(p=to_q),
+                f"destination_name.ilike.{pat},destination_iata.ilike.{pat}",
                 referenced_table="flights_public"
             )
 
+        # Date exact (use a day window instead of ::date cast)
         if date_q:
-            # compare by date part of timestamptz; PostgREST casts with ::date
-            q = q.filter("departure_ts::date", "eq", date_q)
+            start = f"{date_q}T00:00:00Z"
+            end   = f"{date_q}T23:59:59Z"
+            q = q.filter("departure_ts", "gte", start).filter("departure_ts", "lte", end)
 
+        # Max price: accept either current or normal within budget
         if max_price_q:
             try:
-                # if price_current is null, frontend already handles it; we keep <= max on either current or normal
-                maxv = float(max_price_q)
+                maxv = int(float(max_price_q))
                 q = q.or_(
-                    f"price_current.lte.{int(maxv)},price_normal.lte.{int(maxv)}",
+                    f"price_current.lte.{maxv},price_normal.lte.{maxv}",
                     referenced_table="flights_public"
                 )
             except ValueError:
                 pass
 
+        # Status (available|pending) — flights_public already hides unavailable
         if status_q in ("available", "pending"):
             q = q.eq("status_latest", status_q)
 
@@ -147,11 +149,10 @@ def get_flights():
 
         sort_map = {
             "departure": "departure_ts",
-            "price": "price_current",  # falls back to NULLS LAST implicitly
+            "price": "price_current",   # NULLS LAST by default in client; keep nulls_first=False
             "seen": "last_seen_at",
         }
         sort_col = sort_map.get(sort, "departure_ts")
-        # NB: supabase-py order() supports nullsFirst param
         q = q.order(sort_col, desc=desc, nulls_first=False)
 
         # ---- Limit ----
@@ -162,12 +163,11 @@ def get_flights():
         q = q.limit(limit)
 
         resp = q.execute()
-        data = resp.data or []
-        return jsonify(data)
+        return jsonify(resp.data or [])
+
     except Exception as e:
         print(f"❌ /api/flights error: {e}", file=sys.stderr)
         return jsonify({"error": "Failed to fetch flights"}), 500
-
 # Legacy endpoint (kept for compatibility while frontend migrates)
 TABLE = os.getenv("SUPABASE_TABLE", "globeair_flights")  # legacy table name
 @app.route("/api/globeair", methods=["GET", "OPTIONS"])
