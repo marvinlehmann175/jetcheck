@@ -3,6 +3,7 @@ import sys
 import argparse
 from datetime import datetime, timezone
 from pathlib import Path
+from collections import Counter
 import time
 
 # ensure local imports (db.py) work when running this file directly
@@ -92,6 +93,10 @@ def main():
     )
     durations: dict[str, float] = {}
 
+    parsed_status_counts: Counter[str] = Counter()
+    saved_status_counts: Counter[str] = Counter()
+    save_errors: list[str] = []
+
     total_records: list[FlightRecord] = []
     provider_counts: dict[str, int] = {}
     for prov in providers:
@@ -101,6 +106,9 @@ def main():
             print(f"ℹ️  {prov.capitalize()}: {len(recs)}")
             provider_counts[prov] = len(recs)
             total_records.extend(recs)
+            for r in recs:
+                st = str((r.get("status") or "")).lower() or "unknown"
+                parsed_status_counts[st] += 1
             durations[prov] = time.time() - p0
         except Exception as e:
             print(f"❌ {prov} fetch error: {e}", file=sys.stderr)
@@ -122,15 +130,27 @@ def main():
                 if k in provider_counts:
                     dur = durations.get(k, 0.0)
                     lines.append(f"  - {k}: {provider_counts[k]} (in {dur:.2f}s)")
+
             total_dur = time.time() - t_start
             lines += [
                 "",
-                f"Total parsed: {len(total_records)}",
-                f"Elapsed: {total_dur:.2f}s",
-                "(This report was generated before DB writes.)" if args.dry_run else "",
+                f"Parsed total: {len(total_records)}",
+                "Parsed by status:",
             ]
-            report_path.write_text("\n".join([s for s in lines if s != ""]), encoding="utf-8")
-            print(f"🧾 Debug report written: {report_path}")
+            # stable order for readability
+            for st in ["available", "pending", "unavailable", "unknown"]:
+                c = parsed_status_counts.get(st, 0)
+                if c:
+                    lines.append(f"  - {st}: {c}")
+            if not any(parsed_status_counts.values()):
+                lines.append("  - (no status parsed)")
+
+            lines += [
+                "",
+                f"Elapsed (so far): {total_dur:.2f}s",
+            ]
+            if args.dry_run:
+                lines.append("(This report was generated before DB writes — dry run)")
         except Exception as e:
             print(f"⚠️  Failed to write debug report: {e}", file=sys.stderr)
 
@@ -143,9 +163,13 @@ def main():
         try:
             db.upsert_flight_and_snapshot(r)
             saved += 1
+            st = str((r.get("status") or "")).lower() or "unknown"
+            saved_status_counts[st] += 1
         except Exception as e:
             oc = r.get("origin_iata")
             dc = r.get("destination_iata")
+            msg = f"{oc or '??'}→{dc or '??'} — {e}"
+            save_errors.append(msg)
             print(f"❌ Fehler für {oc}→{dc}: {e}", file=sys.stderr)
 
     # Combined debug report
@@ -162,20 +186,55 @@ def main():
                 if k in provider_counts:
                     dur = durations.get(k, 0.0)
                     lines.append(f"  - {k}: {provider_counts[k]} (in {dur:.2f}s)")
+
             total_dur = time.time() - t_start
+            saved_snapshots = saved  # one snapshot per successful upsert
+
             lines += [
                 "",
-                f"Total parsed: {len(total_records)}",
-                f"Total saved: {saved}",
+                f"Parsed total: {len(total_records)}",
+                "Parsed by status:",
+            ]
+            for st in ["available", "pending", "unavailable", "unknown"]:
+                c = parsed_status_counts.get(st, 0)
+                if c:
+                    lines.append(f"  - {st}: {c}")
+            if not any(parsed_status_counts.values()):
+                lines.append("  - (no status parsed)")
+
+            lines += [
+                "",
+                f"Flights saved: {saved}",
+                f"Snapshots taken: {saved_snapshots}",
+                "Saved by status:",
+            ]
+            for st in ["available", "pending", "unavailable", "unknown"]:
+                c = saved_status_counts.get(st, 0)
+                if c:
+                    lines.append(f"  - {st}: {c}")
+            if not any(saved_status_counts.values()):
+                lines.append("  - (no flights saved)")
+
+            if save_errors:
+                lines += [
+                    "",
+                    f"Save errors: {len(save_errors)}",
+                ]
+                # list max 10 to keep report compact
+                for err in save_errors[:10]:
+                    lines.append(f"  - {err}")
+                if len(save_errors) > 10:
+                    lines.append(f"  ... and {len(save_errors)-10} more")
+
+            lines += [
+                "",
                 f"Elapsed: {total_dur:.2f}s",
             ]
-            report_path.write_text("\n".join(lines), encoding="utf-8")
-            print(f"🧾 Debug report written: {report_path}")
         except Exception as e:
             print(f"⚠️  Failed to write debug report: {e}", file=sys.stderr)
 
     refresh_statuses()
-    print(f"✅ {saved} Flüge/Snapshots gespeichert.")
+    print(f"✅ Saved flights: {saved} — snapshots: {saved} — statuses: {dict(saved_status_counts)}")
 
 
 if __name__ == "__main__":
