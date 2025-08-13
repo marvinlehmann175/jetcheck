@@ -279,9 +279,6 @@ export default function Home() {
             >
               <option value="">Alle</option>
               <option value="available">Available</option>
-              <option value="unavailable">Unavailable</option>
-              <option value="departed">Departed</option>
-              <option value="archived">Archived</option>
               <option value="pending">Pending</option>
             </select>
           </label>
