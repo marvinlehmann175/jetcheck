@@ -61,7 +61,7 @@ def refresh_statuses() -> None:
         return
     try:
         sb = create_client(url, key)
-        sb.rpc("refresh_flight_statuses").execute()
+        sb.rpc("refresh_flight_statuses_run").execute()
         print("🧹 Flight statuses refreshed (refresh_flight_statuses).")
     except Exception as e:
         print(f"⚠️  Status refresh failed: {e}", file=sys.stderr)
