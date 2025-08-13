@@ -135,7 +135,7 @@ export default function Home() {
       }
 
       if (status) {
-        const s = String(f.status_latest || f.status || "").toLowerCase();
+        const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
         if (s !== status.toLowerCase()) return false;
       }
 
