@@ -94,7 +94,9 @@ class GlobeAirProvider(Provider):
             departure_ts = _to_iso_utc_naive(date_line, dep_time) if dep_time else None
             arrival_ts   = _to_iso_utc_naive(date_line, arr_time) if arr_time else None
 
+            status = "available"
             status = "pending"
+            status = "unavailable"
             price_current = None
             price_normal = None
             discount_percent = None
@@ -105,7 +107,7 @@ class GlobeAirProvider(Provider):
             if book_btn:
                 price_current = _clean_money(book_btn.get_text())
                 if price_current:
-                    status = "confirmed"
+                    status = "available"
 
             strike = col.select_one("p.flightdata strike")
             if strike:
