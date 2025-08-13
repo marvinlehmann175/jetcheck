@@ -1,6 +1,7 @@
 import os
 import sys
 import flask
+import traceback
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 from supabase import create_client, Client
@@ -86,13 +87,14 @@ def get_flights():
                 "price_current,price_normal,discount_percent,"
                 "currency_effective,status_latest,link_latest,last_seen_at"
             )
-            .order("departure_ts", desc=False, nulls_first=False)
+            .order("departure_ts", desc=False, nullsfirst=False)
             .limit(500)
             .execute()
         )
         return jsonify(resp.data or [])
     except Exception as e:
         print(f"❌ /api/flights error: {e}", file=sys.stderr)
+        traceback.print_exc()  # add this
         return jsonify({"error": "Failed to fetch flights"}), 500
 
 if __name__ == "__main__":
