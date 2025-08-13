@@ -17,6 +17,7 @@ export default function Home() {
   const [to, setTo] = useState("");
   const [date, setDate] = useState(""); // YYYY-MM-DD
   const [maxPrice, setMaxPrice] = useState("");
+  const [status, setStatus] = useState("");
   const [sortKey, setSortKey] = useState("departure"); // departure | price | seen
   const [sortDir, setSortDir] = useState("asc");
 
@@ -28,13 +29,15 @@ export default function Home() {
     if (to.trim()) n++;
     if (date.trim()) n++;
     if (String(maxPrice).trim()) n++;
+    if (status.trim()) n++;
     return n;
-  }, [from, to, date, maxPrice]);
+  }, [from, to, date, maxPrice, status]);
   const resetFilters = () => {
     setFrom("");
     setTo("");
     setDate("");
     setMaxPrice("");
+    setStatus("");
   };
 
   // Pagination
@@ -73,9 +76,11 @@ export default function Home() {
 
   const priceToNumber = (pCurrent, pNormal) => {
     const val =
-      typeof pCurrent === "number" ? pCurrent :
-      typeof pNormal === "number" ? pNormal :
-      NaN;
+      typeof pCurrent === "number"
+        ? pCurrent
+        : typeof pNormal === "number"
+        ? pNormal
+        : NaN;
     return Number.isFinite(val) ? val : Number.POSITIVE_INFINITY;
   };
 
@@ -90,6 +95,8 @@ export default function Home() {
       const dName = (f.destination_name || "").toLowerCase();
       const oIata = (f.origin_iata || "").toLowerCase();
       const dIata = (f.destination_iata || "").toLowerCase();
+      const depTs = f.departure_ts ? new Date(f.departure_ts).getTime() : 0;
+      if (depTs && depTs < Date.now()) return false;
 
       // Textsuche über beide Orte + IATA
       if (
@@ -104,7 +111,10 @@ export default function Home() {
         return false;
       }
 
-      if (fromLower && !(oName.includes(fromLower) || oIata.includes(fromLower))) {
+      if (
+        fromLower &&
+        !(oName.includes(fromLower) || oIata.includes(fromLower))
+      ) {
         return false;
       }
       if (toLower && !(dName.includes(toLower) || dIata.includes(toLower))) {
@@ -124,9 +134,14 @@ export default function Home() {
         }
       }
 
+      if (status) {
+        const s = String(f.status_latest || f.status || "").toLowerCase();
+        if (s !== status.toLowerCase()) return false;
+      }
+
       return true;
     });
-  }, [flights, q, from, to, date, maxPrice]);
+  }, [flights, q, from, to, date, maxPrice, status]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -164,7 +179,7 @@ export default function Home() {
 
   useEffect(() => {
     setPage(1);
-  }, [q, from, to, date, maxPrice, sortKey, sortDir]);
+  }, [q, from, to, date, maxPrice, status, sortKey, sortDir]);
 
   return (
     <main className="screen">
@@ -237,7 +252,11 @@ export default function Home() {
       >
         <div className="filters-header">
           <h2 id="filters-title">Filter</h2>
-          <button className="btn btn-close" onClick={() => setShowFilters(false)} aria-label="Schließen">
+          <button
+            className="btn btn-close"
+            onClick={() => setShowFilters(false)}
+            aria-label="Schließen"
+          >
             ✕
           </button>
         </div>
@@ -249,6 +268,21 @@ export default function Home() {
             setShowFilters(false);
           }}
         >
+          <label className="label">
+            Status
+            <select
+              className="select"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+            >
+              <option value="">Alle</option>
+              <option value="available">Available</option>
+              <option value="unavailable">Unavailable</option>
+              <option value="departed">Departed</option>
+              <option value="archived">Archived</option>
+              <option value="pending">Pending</option>
+            </select>
+          </label>
           <label className="label">
             Abflug (Ort/IATA)
             <input
@@ -292,7 +326,11 @@ export default function Home() {
           </label>
 
           <div className="filters-actions">
-            <button type="button" className="btn btn-secondary" onClick={resetFilters}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={resetFilters}
+            >
               Zurücksetzen
             </button>
             <button type="submit" className="btn btn-primary">

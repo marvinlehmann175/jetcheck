@@ -226,17 +226,16 @@ body {
 .btn--disabled { opacity: .5; cursor: not-allowed; }
 
 .btn--book {
-  border: none;
-  background: linear-gradient(135deg, var(--brand), var(--brand-2));
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 10px 18px;
-  border-radius: var(--radius-md);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-  transition: all 0.2s ease;
+    border: none;
+    background: linear-gradient(135deg, var(--brand), var(--brand-2));
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, .4);
+    transition: all .2s ease;
 }
 
 .btn--book:hover {
@@ -395,20 +394,44 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 .opby {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   font-size: 11px;
   color: var(--muted);
   border: 1px solid var(--border);
   background: var(--chip);
   padding: 6px 8px;
   border-radius: 999px;
-  white-space: nowrap;
+  white-space: normal; /* allow line break */
 }
 .opby--globeair {
   background: linear-gradient(135deg, rgba(139,92,246,.18), rgba(34,211,238,.12));
 }
-.opby--asl {
-  background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(139,92,246,.12));
+
+.opby__updated {
+  font-size: 10px;
+  opacity: .75;
 }
+
+/* Status chip (top-right) */
+.status-chip {
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.status-chip--available { color: var(--ok); border-color: rgba(16,185,129,.4); }
+.status-chip--unavailable { color: #f59e0b; border-color: rgba(245,158,11,.25); }
+.status-chip--archived { color: #9ca3af; border-color: rgba(156,163,175,.25); }
+.status-chip--departed { color: #9ca3af; border-color: rgba(156,163,175,.25); }
+.status-chip--pending { color: var(--muted); }
+
+/* Keep existing per-source backgrounds */
 
 /* ---------------------------------
    9) Footer

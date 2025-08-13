@@ -97,8 +97,14 @@ export default function FlightCard({ flight }) {
       {/* Kopfzeile */}
       <div className="flightcard__toprow">
         <div className="flightcard__date">{depDate}</div>
-        {last_seen_at && (
-          <div className="updated-chip">{timeAgo(last_seen_at)}</div>
+        {statusText && (
+          <div
+            className={`status-chip status-chip--${String(
+              status_latest || ""
+            ).toLowerCase()}`}
+          >
+            {statusText}
+          </div>
         )}
       </div>
 
@@ -156,15 +162,16 @@ export default function FlightCard({ flight }) {
           </button>
         )}
 
-        {source ? (
-          <span className={`opby opby--${source.toLowerCase()}`}>
-            Operated by <strong>{source}</strong>
+        <span className={`opby opby--${(source || "").toLowerCase()}`}>
+          <span>
+            Operated by <strong>{source || "—"}</strong>
           </span>
-        ) : (
-          <span className="opby">
-            Operated by <strong>—</strong>
-          </span>
-        )}
+          {last_seen_at && (
+            <span className="opby__updated">
+              updated {timeAgo(last_seen_at)}
+            </span>
+          )}
+        </span>
       </div>
     </article>
   );
