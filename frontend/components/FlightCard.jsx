@@ -134,7 +134,9 @@ export default function FlightCard({ flight }) {
             {(normalPriceLabel || showDiscount) && (
               <div className="info-sub">
                 {normalPriceLabel && (
-                  <span className="info-label"><span className="info-compare">{normalPriceLabel}</span></span>
+                  <span className="info-label">
+                    <span className="info-compare">{normalPriceLabel}</span>
+                  </span>
                 )}
                 {showDiscount && (
                   <span className="info-badge">
@@ -151,7 +153,7 @@ export default function FlightCard({ flight }) {
               href={link_latest}
               target="_blank"
               rel="noreferrer"
-              aria-label="Jetzt buchen"
+              aria-label={`Book flight ${oCode} to ${dCode}`}
             >
               ✈ Book now
             </a>

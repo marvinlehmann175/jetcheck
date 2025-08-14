@@ -223,13 +223,13 @@ body {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px;         /* slightly tighter for better fit */
+  padding: 8px 12px; /* slightly tighter for better fit */
   outline: none;
-  height: auto;              /* allow natural vertical size */
-  min-height: 42px;          /* keep minimum height */
-  line-height: 1.2;          /* avoid clipping in Safari */
+  height: auto; /* allow natural vertical size */
+  min-height: 42px; /* keep minimum height */
+  line-height: 1.2; /* avoid clipping in Safari */
   width: 100%;
-  -webkit-appearance: none;  /* normalize select rendering */
+  -webkit-appearance: none; /* normalize select rendering */
   appearance: none;
 }
 .input::placeholder {
@@ -250,7 +250,7 @@ body {
   flex-wrap: wrap;
 }
 .controls-bar .selects .select {
-  flex: 0 0 160px;   /* don't shrink; give a sensible width */
+  flex: 0 0 160px; /* don't shrink; give a sensible width */
   min-width: 140px;
 }
 
@@ -492,7 +492,6 @@ body {
 
 /* Preis & Status */
 
-
 .flightcard__pricing {
   display: flex;
   align-items: center;
@@ -525,9 +524,9 @@ body {
 .info-main {
   display: flex;
   flex-direction: column;
-  gap: 4px;          /* tighter spacing between title & sub */
-  min-width: 0;      /* nicer wrap */
-  margin-bottom: 0;  /* no extra bottom gap to keep boxes consistent */
+  gap: 4px; /* tighter spacing between title & sub */
+  min-width: 0; /* nicer wrap */
+  margin-bottom: 0; /* no extra bottom gap to keep boxes consistent */
 }
 
 .info-title {
@@ -535,7 +534,7 @@ body {
   font-weight: 700;
   color: var(--text);
   font-size: 16px;
-  letter-spacing: .2px;
+  letter-spacing: 0.2px;
   margin: 0;
 }
 
@@ -553,13 +552,13 @@ body {
 .info-label {
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: .2px;
+  letter-spacing: 0.2px;
   color: var(--muted);
-  opacity: .95;
+  opacity: 0.95;
 }
 
 .info-compare {
-  opacity: .6;
+  opacity: 0.6;
   text-decoration: line-through;
   font-weight: 600;
 }
@@ -571,23 +570,31 @@ body {
   border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: .2px;
-  background: rgba(16,185,129,.12);
-  border: 1px solid rgba(16,185,129,.35);
+  letter-spacing: 0.2px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   color: var(--ok);
 }
 
 .info-badge--prob {
-  background: rgba(34,211,238,.12);   /* brand-2 tint */
-  border-color: rgba(34,211,238,.35);
+  background: rgba(34, 211, 238, 0.12); /* brand-2 tint */
+  border-color: rgba(34, 211, 238, 0.35);
   color: var(--brand-2);
 }
 
 /* CTA kompakt in der Zeile, auf Mobile vollbreit */
-.btn--book-inline { white-space: nowrap; }
+.btn--book-inline {
+  white-space: nowrap;
+}
 @media (max-width: 640px) {
-  .info-box { flex-direction: column; align-items: stretch; }
-  .btn--book-inline { width: 100%; text-align: center; }
+  .info-box {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .btn--book-inline {
+    width: 100%;
+    text-align: center;
+  }
 }
 
 /* Status-Note kleiner */
@@ -654,6 +661,30 @@ body {
   font-weight: 800;
   color: var(--muted);
   background: rgba(255, 255, 255, 0.05);
+}
+
+.flightcard__quickchips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip--deal {
+  color: #fde68a;
+  border-color: #51441b;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.chip--soon {
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.35);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.chip--prob {
+  color: var(--brand-2);
+  border-color: rgba(34, 211, 238, 0.35);
+  background: rgba(34, 211, 238, 0.12);
 }
 
 /* Statusfarben beibehalten */
@@ -755,6 +786,11 @@ body {
   line-height: 1;
   padding: 6px 8px;
   cursor: pointer;
+}
+
+.btn:focus, .input:focus, .select:focus, a:focus {
+  outline: 2px solid color-mix(in srgb, var(--brand) 60%, #fff);
+  outline-offset: 2px;
 }
 
 /* Overlay hinter dem Drawer */
