@@ -167,8 +167,11 @@ def get_flights():
         response.headers["Cache-Control"] = "no-store"
         return response
     except Exception as e:
-        print(f"❌ /api/flights error: {e}", file=sys.stderr)
+        err = getattr(e, "args", [str(e)])[0]
+        print(f"❌ /api/flights error: {err}", file=sys.stderr)
         traceback.print_exc()
+        if os.getenv("FLASK_DEBUG", "0") == "1":
+            return jsonify({"error": "Failed to fetch flights", "detail": str(err)}), 500
         return jsonify({"error": "Failed to fetch flights"}), 500
     
 if __name__ == "__main__":
