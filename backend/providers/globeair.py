@@ -49,8 +49,12 @@ def _to_utc_iso(date_str: Optional[str], time_str: Optional[str], tz_name: Optio
     if not (date_str and time_str and tz_name):
         return None
     try:
-        naive = dtparser.parse(f"{date_str} {time_str}")          # naive local clock time
-        local = naive.replace(tzinfo=ZoneInfo(tz_name))           # attach correct tz
+        naive = dtparser.parse(f"{date_str} {time_str}")  # naive, calendar time
+        try:
+            tz = ZoneInfo(tz_name)  # can raise if tz_name invalid
+        except Exception:
+            return None
+        local = naive.replace(tzinfo=tz)                   # attach correct tz
         utc   = local.astimezone(timezone.utc)
         return utc.isoformat().replace("+00:00", "Z")
     except Exception:

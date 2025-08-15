@@ -142,6 +142,16 @@ def get_latlon(code_or_name: str) -> Tuple[Optional[float], Optional[float]]:
     except (ValueError, TypeError):
         return (None, None)
 
+def get_tz(code_or_name: str) -> Optional[str]:
+    """
+    Return IANA timezone name (e.g., 'Europe/Rome') for an airport/city/IATA/ICAO.
+    """
+    row = resolve(code_or_name)
+    if not row:
+        return None
+    tz = row.get("tz")
+    return tz if isinstance(tz, str) and tz.strip() else None
+
 __all__ = [
     "build_indexes",
     "resolve",
