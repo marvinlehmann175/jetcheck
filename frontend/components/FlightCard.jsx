@@ -1,5 +1,11 @@
 "use client";
 
+import LocalTime from '@/components/LocalTime';
+import { parsePgTimestamptz } from '@/utils/time';
+import { dayLabel } from '@/utils/time';
+
+
+// tiny helpers
 function fmtDate(ts) {
   if (!ts) return "—";
   try {
@@ -7,19 +13,7 @@ function fmtDate(ts) {
       day: "2-digit",
       month: "short",
       year: "numeric",
-    }).format(new Date(ts));
-  } catch {
-    return "—";
-  }
-}
-
-function fmtTime(ts) {
-  if (!ts) return "—";
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(ts));
+    }).format(parsePgTimestamptz(ts));
   } catch {
     return "—";
   }
@@ -40,14 +34,14 @@ function fmtPrice(amount, currency = "EUR") {
 
 function timeAgo(ts) {
   if (!ts) return null;
-  const diffMs = Date.now() - new Date(ts).getTime();
+  const diffMs = Date.now() - parsePgTimestamptz(ts).getTime();
   const diffMin = Math.floor(diffMs / 60000);
   if (diffMin < 1) return "now";
-  if (diffMin < 60) return `${diffMin} Min ago`;
+  if (diffMin < 60) return `${diffMin} min ago`;
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `vor ${diffH} Std`;
+  if (diffH < 24) return `${diffH} h ago`;
   const diffD = Math.floor(diffH / 24);
-  return `vor ${diffD} Tg`;
+  return `${diffD} d ago`;
 }
 
 export default function FlightCard({ flight }) {
@@ -63,7 +57,6 @@ export default function FlightCard({ flight }) {
     arrival_ts,
     aircraft,
     link_latest,
-    currency_effective,
     price_current,
     price_normal,
     discount_percent,
@@ -76,13 +69,10 @@ export default function FlightCard({ flight }) {
   const oName = origin_name || oCode;
   const dName = destination_name || dCode;
 
-  const depDate = fmtDate(departure_ts);
-  const depTime = fmtTime(departure_ts);
-  const arrTime = fmtTime(arrival_ts);
-
-  const priceLabel = fmtPrice(price_current, currency_effective);
+  const depDate = fmtDate(departure_ts); // date chip
+  const priceLabel = fmtPrice(price_current, "EUR"); // we store/display EUR now
   const normalPriceLabel =
-    price_normal != null ? fmtPrice(price_normal, currency_effective) : null;
+    price_normal != null ? fmtPrice(price_normal, "EUR") : null;
 
   const showDiscount =
     discount_percent != null && !Number.isNaN(Number(discount_percent));
@@ -92,11 +82,13 @@ export default function FlightCard({ flight }) {
       ? "Pending"
       : status_latest || "";
 
+  const depChip = dayLabel(departure_ts); // "Today" | "Tomorrow" | "Upcoming"
+
   return (
     <article className="card flightcard">
-      {/* Kopfzeile */}
+      {/* Top row */}
       <div className="flightcard__toprow">
-        <div className="chip chip--date">{depDate}</div>
+        <div className="chip chip--date">{depChip}</div>
         {statusText && (
           <div
             className={`chip chip--status status-chip status-chip--${String(
@@ -108,25 +100,28 @@ export default function FlightCard({ flight }) {
         )}
       </div>
 
-      {/* Airports & Zeiten */}
+      {/* Airports & times */}
       <div className="flightcard__airports">
         <div className="flightcard__airport">
           <div className="flightcard__name">{oName}</div>
           <div className="flightcard__code">{oCode}</div>
-          <div className="flightcard__time">{depTime}</div>
+          <div className="flightcard__dt">
+            <LocalTime mode="date" ts={departure_ts} className="flightcard__date" />
+            <LocalTime mode="time" ts={departure_ts} className="flightcard__time" />
+          </div>
         </div>
-        <div className="flightcard__arrow" aria-hidden>
-          —
-        </div>
+        <div className="flightcard__arrow" aria-hidden>—</div>
         <div className="flightcard__airport flightcard__airport--right">
           <div className="flightcard__name">{dName}</div>
           <div className="flightcard__code">{dCode}</div>
-          <div className="flightcard__time">{arrTime}</div>
+          <div className="flightcard__dt">
+            <LocalTime mode="date" ts={arrival_ts} className="flightcard__date" />
+            <LocalTime mode="time" ts={arrival_ts} className="flightcard__time" />
+          </div>
         </div>
       </div>
 
-      {/* Preis / CTA / Extras */}
-      {/* Preis / CTA ODER Pending — immer mit gleicher Box-Optik */}
+      {/* Price / CTA or Pending */}
       {priceLabel ? (
         <div className="info-box">
           <div className="info-main">
@@ -139,9 +134,7 @@ export default function FlightCard({ flight }) {
                   </span>
                 )}
                 {showDiscount && (
-                  <span className="info-badge">
-                    −{Math.round(discount_percent)}%
-                  </span>
+                  <span className="info-badge">−{Math.round(discount_percent)}%</span>
                 )}
               </div>
             )}
@@ -162,7 +155,6 @@ export default function FlightCard({ flight }) {
       ) : (
         <div className="info-box info-box--stack">
           <div className="info-title">Flight not confirmed yet</div>
-
           {Number.isFinite(flight?.probability) && (
             <div className="info-sub">
               <span className="info-label">Probability</span>
@@ -176,7 +168,6 @@ export default function FlightCard({ flight }) {
 
       {aircraft && <div className="aircraft">{aircraft}</div>}
 
-      {/* Meta unter dem Footer */}
       <div className="card__meta">
         <div className="meta-left">
           <span className={`opby-text opby--${(source || "").toLowerCase()}`}>
@@ -185,9 +176,7 @@ export default function FlightCard({ flight }) {
         </div>
         <div className="meta-right">
           {last_seen_at && (
-            <span className="meta-updated">
-              updated {timeAgo(last_seen_at)}
-            </span>
+            <span className="meta-updated">updated {timeAgo(last_seen_at)}</span>
           )}
         </div>
       </div>

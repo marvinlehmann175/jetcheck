@@ -11,6 +11,12 @@ from providers.base import Provider
 from common.http import get_text
 from common.types import FlightRecord
 
+from datetime import timezone
+from zoneinfo import ZoneInfo
+from dateutil import parser as dtparser
+
+from common.airports import get_tz
+
 GLOBEAIR_URL = "https://www.globeair.com/empty-leg-flights"
 
 RE_GA_TITLE = re.compile(r"^\s*(.+?)\s*\(([A-Z]{3})\)\s*→\s*(.+?)\s*\(([A-Z]{3})\)\s*$")
@@ -35,18 +41,20 @@ def _clean_money(text: Optional[str]):
             return None
 
 
-def _to_iso_utc_naive(date_str: Optional[str], time_str: Optional[str]) -> Optional[str]:
-    # GlobeAir shows local date/time without TZ; store as naive-UTC string (simple + consistent)
-    from dateutil import parser as dtparser
-    if not (date_str and time_str):
+def _to_utc_iso(date_str: Optional[str], time_str: Optional[str], tz_name: Optional[str]) -> Optional[str]:
+    """
+    Convert local date+time (e.g. 'August 16, 2025' + '6:50 AM') in tz_name
+    to a UTC ISO string ending with 'Z'.
+    """
+    if not (date_str and time_str and tz_name):
         return None
     try:
-        d = dtparser.parse(date_str)
-        t = dtparser.parse(time_str, default=d).replace(tzinfo=None)
-        return t.isoformat() + "Z"
+        naive = dtparser.parse(f"{date_str} {time_str}")          # naive local clock time
+        local = naive.replace(tzinfo=ZoneInfo(tz_name))           # attach correct tz
+        utc   = local.astimezone(timezone.utc)
+        return utc.isoformat().replace("+00:00", "Z")
     except Exception:
         return None
-
 
 class GlobeAirProvider(Provider):
     name = "globeair"
@@ -97,8 +105,11 @@ class GlobeAirProvider(Provider):
             if tm:
                 dep_time, arr_time = tm.groups()
 
-            departure_ts = _to_iso_utc_naive(date_line, dep_time) if dep_time else None
-            arrival_ts   = _to_iso_utc_naive(date_line, arr_time) if arr_time else None
+            tz_o = get_tz(origin_iata) or "Europe/Vienna"  # safe fallback within EU
+            tz_d = get_tz(dest_iata) or tz_o
+
+            departure_ts = _to_utc_iso(date_line, dep_time, tz_o) if dep_time else None
+            arrival_ts   = _to_utc_iso(date_line, arr_time, tz_d) if arr_time else None
 
             # default pending; bump to available if a priced "Book" button is present
             status = "pending"

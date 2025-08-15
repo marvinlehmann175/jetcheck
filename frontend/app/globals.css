@@ -457,13 +457,32 @@ body {
   align-items: start;
   gap: 18px;
 }
+
+/* Default: left column alignment */
 .flightcard__airport {
-  display: grid;
-  grid-template-rows: auto auto auto; /* name, code, time */
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  align-items: flex-start;
   gap: 4px;
 }
+
+/* Date/time container default */
+.flightcard__dt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start; /* left side */
+  line-height: 1.25;
+  gap: 4px; /* more breathing space between date & time */
+}
+
+/* Right column override */
 .flightcard__airport--right {
+  align-items: flex-end;
   text-align: right;
+}
+.flightcard__airport--right .flightcard__dt {
+  align-items: flex-end; /* right side stays right-aligned */
 }
 
 .flightcard__name {
@@ -476,18 +495,18 @@ body {
   font-weight: 800;
   letter-spacing: 0.5px;
 }
-.flightcard__time {
-  margin-top: 2px;
-  font-weight: 600;
-  color: var(--text);
-  opacity: 0.9;
-}
 
 .flightcard__arrow {
   align-self: center;
   color: var(--muted);
   font-weight: 700;
   letter-spacing: 0.1em;
+}
+
+/* already present, but keep for clarity */
+.flightcard__date { opacity: .75; font-size: .875rem; }
+.flightcard__time { font-weight: 600; font-size: 1rem;   letter-spacing: .2px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Preis & Status */
@@ -657,6 +676,24 @@ body {
   color: var(--text);
   opacity: 0.95;
 }
+
+/* Day chips */
+.chip--today {
+  color: var(--ok);
+  border-color: rgba(16,185,129,.35);
+  background: rgba(16,185,129,.12);
+}
+.chip--tomorrow {
+  color: var(--brand-2);
+  border-color: rgba(34,211,238,.35);
+  background: rgba(34,211,238,.12);
+}
+.chip--upcoming {
+  color: var(--muted);
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+}
+
 .chip--status {
   font-weight: 800;
   color: var(--muted);

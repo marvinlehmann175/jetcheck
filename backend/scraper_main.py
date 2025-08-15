@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from collections import Counter
+from common.airports import build_indexes
 
 # ensure local imports (db.py) work when running this file directly
 sys.path.append(os.path.dirname(__file__))
@@ -150,6 +151,7 @@ def dedupe_by_canonical(records: list[dict]) -> list[dict]:
 # ---------- main ----------
 def main():
     load_dotenv()
+    build_indexes()
 
     # Shared Supabase client (reuses service-role key from db.py)
     sb = get_supabase()

@@ -150,4 +150,5 @@ __all__ = [
     "to_names",
     "to_iata_by_name",
     "get_latlon",
+    "get_tz",
 ]
