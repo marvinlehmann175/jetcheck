@@ -12,7 +12,7 @@ export default function Home() {
   // --- i18n ---------------------------------------------------------------
   const [lang] = useState("en"); // <- set your default language code here
   const dict = messages?.[lang] || {};
-  const tt = (k, fb) => (dict[k] ?? fb); // simple safe getter
+  const tt = (k, fb) => dict[k] ?? fb; // simple safe getter
 
   // --- data + ui state ----------------------------------------------------
   const [flights, setFlights] = useState([]);
@@ -21,15 +21,15 @@ export default function Home() {
 
   // Filters
   const [status, setStatus] = useState(""); // "", "available", "pending"
-  const [from, setFrom] = useState("");     // IATA
-  const [to, setTo] = useState("");         // IATA
-  const [date, setDate] = useState("");     // YYYY-MM-DD
+  const [from, setFrom] = useState(""); // IATA
+  const [to, setTo] = useState(""); // IATA
+  const [date, setDate] = useState(""); // YYYY-MM-DD
   const [maxPrice, setMaxPrice] = useState("");
   const [aircraft, setAircraft] = useState("");
 
   // Sort/pagination
   const [sortKey, setSortKey] = useState("departure"); // "departure" | "price" | "seen"
-  const [sortDir, setSortDir] = useState("asc");       // "asc" | "desc"
+  const [sortDir, setSortDir] = useState("asc"); // "asc" | "desc"
   const [page, setPage] = useState(1);
   const pageSize = 12;
 
@@ -37,30 +37,39 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
 
   // --- fetch --------------------------------------------------------------
+
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      setLoading(true);
+    (async () => {
       setError("");
+      setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/flights`, { cache: "no-store" });
+        const res = await fetch(`${API_BASE}/api/flights`, {
+          cache: "no-store",
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (!cancelled) setFlights(Array.isArray(data) ? data : []);
-      } catch (e) {
-        console.error(e);
-        if (!cancelled) setError(tt("error.load", "Failed to load flights."));
+      } catch {
+        if (!cancelled) setError("Failed to load flights");
       } finally {
         if (!cancelled) setLoading(false);
       }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, []); // once
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // --- helpers ------------------------------------------------------------
+  // Always hide 'unavailable'
+  const baseFlights = useMemo(() => {
+    return (flights || []).filter((f) => {
+      const s = String(f.status ?? "").toLowerCase();
+      return s !== "unavailable";
+    });
+  }, [flights]);
+
   const priceToNumber = (pCurrent, pNormal) => {
     const val =
       typeof pCurrent === "number"
@@ -74,11 +83,12 @@ export default function Home() {
   // Options for dropdowns (filtered to “currently possible”)
   const departureOptions = useMemo(() => {
     const m = new Map();
-    for (const f of flights) {
+    for (const f of baseFlights) {
       const code = (f.origin_iata || "").toUpperCase();
       if (!code) continue;
       // keep only pairs that match selected destination/status (if any)
-      if (to && (f.destination_iata || "").toUpperCase() !== to.toUpperCase()) continue;
+      if (to && (f.destination_iata || "").toUpperCase() !== to.toUpperCase())
+        continue;
       if (status) {
         const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
         if (s !== status.toLowerCase()) continue;
@@ -86,16 +96,18 @@ export default function Home() {
       const name = f.origin_name || code;
       if (!m.has(code)) m.set(code, `${code} — ${name}`);
     }
-    return Array.from(m, ([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [flights, status, to]);
+    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [baseFlights, status, to]);
 
   const destinationOptions = useMemo(() => {
     const m = new Map();
-    for (const f of flights) {
+    for (const f of baseFlights) {
       const code = (f.destination_iata || "").toUpperCase();
       if (!code) continue;
-      if (from && (f.origin_iata || "").toUpperCase() !== from.toUpperCase()) continue;
+      if (from && (f.origin_iata || "").toUpperCase() !== from.toUpperCase())
+        continue;
       if (status) {
         const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
         if (s !== status.toLowerCase()) continue;
@@ -103,18 +115,19 @@ export default function Home() {
       const name = f.destination_name || code;
       if (!m.has(code)) m.set(code, `${code} — ${name}`);
     }
-    return Array.from(m, ([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  }, [flights, status, from]);
+    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
+  }, [baseFlights, status, from]);
 
   const aircraftOptions = useMemo(() => {
     const set = new Set();
-    for (const f of flights) {
+    for (const f of baseFlights) {
       if (f.aircraft && String(f.aircraft).trim())
         set.add(String(f.aircraft).trim());
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [flights]);
+  }, [baseFlights]);
 
   // Active filters counter (for the Filter button)
   const activeFilters = useMemo(() => {
@@ -139,7 +152,7 @@ export default function Home() {
 
   // --- filtering/sorting/paging ------------------------------------------
   const filtered = useMemo(() => {
-    return (flights || []).filter((f) => {
+    return (baseFlights || []).filter((f) => {
       // Hide past flights
       const depMs = f.departure_ts ? new Date(f.departure_ts).getTime() : 0;
       if (depMs && depMs < Date.now()) return false;
@@ -176,7 +189,7 @@ export default function Home() {
 
       return true;
     });
-  }, [flights, status, from, to, date, maxPrice, aircraft]);
+  }, [baseFlights, status, from, to, date, maxPrice, aircraft]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
@@ -211,7 +224,9 @@ export default function Home() {
     const start = (currentPage - 1) * pageSize;
     return sorted.slice(start, start + pageSize);
   }, [sorted, currentPage]);
-  useEffect(() => { setPage(1); }, [status, from, to, date, maxPrice, aircraft, sortKey, sortDir]);
+  useEffect(() => {
+    setPage(1);
+  }, [status, from, to, date, maxPrice, aircraft, sortKey, sortDir]);
 
   // --- render -------------------------------------------------------------
   return (
@@ -225,7 +240,12 @@ export default function Home() {
 
       <section className="hero">
         <h1>{tt("hero.title", "Exclusive Empty Legs in Real Time")}</h1>
-        <p>{tt("hero.subtitle", "Find available empty legs with just one click.")}</p>
+        <p>
+          {tt(
+            "hero.subtitle",
+            "Find available empty legs with just one click."
+          )}
+        </p>
       </section>
 
       {/* Controls Top Bar (Sort + Filter Button) */}
@@ -237,7 +257,8 @@ export default function Home() {
             aria-expanded={showFilters ? "true" : "false"}
             aria-controls="filters-drawer"
           >
-            {tt("filters.button", "🔎 Filters")} {activeFilters > 0 ? `(${activeFilters})` : ""}
+            {tt("filters.button", "🔎 Filters")}{" "}
+            {activeFilters > 0 ? `(${activeFilters})` : ""}
           </button>
 
           <div className="selects">
@@ -247,7 +268,9 @@ export default function Home() {
               onChange={(e) => setSortKey(e.target.value)}
               aria-label={tt("sort.label", "Sort by")}
             >
-              <option value="departure">{tt("sort.departure", "Departure Time")}</option>
+              <option value="departure">
+                {tt("sort.departure", "Departure Time")}
+              </option>
               <option value="price">{tt("sort.price", "Price")}</option>
               <option value="seen">{tt("sort.seen", "Last Seen")}</option>
             </select>
@@ -292,7 +315,12 @@ export default function Home() {
 
       <section className="content">
         {loading && (
-          <div className="grid" role="status" aria-live="polite" aria-busy="true">
+          <div
+            className="grid"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
             {Array.from({ length: 9 }).map((_, i) => (
               <div key={i} className="card skeleton-block" />
             ))}
@@ -300,7 +328,11 @@ export default function Home() {
         )}
 
         {!loading && error && (
-          <div className="notice notice--error" role="alert" aria-live="assertive">
+          <div
+            className="notice notice--error"
+            role="alert"
+            aria-live="assertive"
+          >
             {error}
           </div>
         )}
@@ -331,7 +363,8 @@ export default function Home() {
                     ◀︎ {tt("pager.back", "Back")}
                   </button>
                   <div className="pager__info">
-                    {tt("pager.page", "Page")} {currentPage} / {totalPages} · {total} {tt("pager.results", "results")}
+                    {tt("pager.page", "Page")} {currentPage} / {totalPages} ·{" "}
+                    {total} {tt("pager.results", "results")}
                   </div>
                   <button
                     className="btn"
@@ -350,7 +383,11 @@ export default function Home() {
       <footer className="footer">
         <span>© {new Date().getFullYear()} JetCheck</span>
         <span className="sep">•</span>
-        <a href="https://jetcheck-eight.vercel.app" target="_blank" rel="noreferrer">
+        <a
+          href="https://jetcheck-eight.vercel.app"
+          target="_blank"
+          rel="noreferrer"
+        >
           {tt("footer.live", "Live")}
         </a>
       </footer>

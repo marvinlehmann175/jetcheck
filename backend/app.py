@@ -79,13 +79,11 @@ def get_flights():
         return jsonify({"error": "Supabase client not configured"}), 500
     try:
         q = supabase.table("flights_public").select(
-            "id,canonical_hash,"
-            "origin_iata,origin_name,origin_lat,origin_lon,"
-            "destination_iata,destination_name,destination_lat,destination_lon,"
+            "id,source,origin_iata,origin_name,destination_iata,destination_name,"
             "departure_ts,arrival_ts,aircraft,"
-            "price_current,price_normal,discount_percent,"
-            "currency_effective,status_latest,link_latest,last_seen_at,"
-            "probability"
+            "price_current,"
+            "status_latest,link_latest,last_seen_at,"
+            "canonical_hash,origin_lat,origin_lon,destination_lat,destination_lon"
         )
 
         # --- filters (all optional) ---

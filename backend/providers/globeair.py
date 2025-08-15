@@ -18,6 +18,7 @@ RE_GA_TIME  = re.compile(r"^\s*([0-9: ]+[AP]M)\s*→\s*([0-9: ]+[AP]M)\s*$")
 RE_PCT      = re.compile(r"-?(\d+)%")
 RE_MONEY    = re.compile(r"(\d[\d.,]*)")
 
+
 def _clean_money(text: Optional[str]):
     if not text:
         return None
@@ -33,8 +34,9 @@ def _clean_money(text: Optional[str]):
         except ValueError:
             return None
 
+
 def _to_iso_utc_naive(date_str: Optional[str], time_str: Optional[str]) -> Optional[str]:
-    # GlobeAir shows local date/time without TZ; store as naive-UTC string (same approach as before)
+    # GlobeAir shows local date/time without TZ; store as naive-UTC string (simple + consistent)
     from dateutil import parser as dtparser
     if not (date_str and time_str):
         return None
@@ -44,6 +46,7 @@ def _to_iso_utc_naive(date_str: Optional[str], time_str: Optional[str]) -> Optio
         return t.isoformat() + "Z"
     except Exception:
         return None
+
 
 class GlobeAirProvider(Provider):
     name = "globeair"
@@ -56,7 +59,7 @@ class GlobeAirProvider(Provider):
         html = get_text(GLOBEAIR_URL, headers={"Referer": self.base_url})
         self.dbg.save_html("globeair.html", html)
         self.dbg.add(f"fetched_bytes={len(html)}")
-        return self._parse(html)
+        return self._parse(html)  # <-- this exists again
 
     def _parse(self, html: str) -> List[FlightRecord]:
         soup = BeautifulSoup(html, "html.parser")
@@ -66,18 +69,21 @@ class GlobeAirProvider(Provider):
         self.dbg.add(f"ga_cols={len(cols)}")
 
         rows: List[FlightRecord] = []
+        seen_keys: set[tuple[str, str, str | None, str | None, str | None]] = set()
+
         for idx, col in enumerate(cols):
             h3 = col.select_one("h3.caption")
             p  = col.select_one("p.flightdata")
             if not h3 or not p:
-                # noisy, so only log when debug is explicitly enabled
-                self.dbg.add(f"skip[{idx}]=no_caption_or_flightdata")
+                if self.debug:
+                    self.dbg.add(f"skip[{idx}]=no_caption_or_flightdata")
                 continue
 
             title = h3.get_text(" ", strip=True)
             m = RE_GA_TITLE.match(title)
             if not m:
-                self.dbg.add(f"skip[{idx}]=title_nomatch '{title}'")
+                if self.debug:
+                    self.dbg.add(f"skip[{idx}]=title_nomatch '{title}'")
                 continue
             origin_name, origin_iata, dest_name, dest_iata = m.groups()
 
@@ -94,9 +100,8 @@ class GlobeAirProvider(Provider):
             departure_ts = _to_iso_utc_naive(date_line, dep_time) if dep_time else None
             arrival_ts   = _to_iso_utc_naive(date_line, arr_time) if arr_time else None
 
-            status = "available"
+            # default pending; bump to available if a priced "Book" button is present
             status = "pending"
-            status = "unavailable"
             price_current = None
             price_normal = None
             discount_percent = None
@@ -139,6 +144,23 @@ class GlobeAirProvider(Provider):
             if a0:
                 href = a0.get("href")
                 link = urljoin(self.base_url, href) if href else None
+
+            # ---------- NEW: de-dupe per card ----------
+            # normalize link a bit to avoid duplicates from tracking params
+            link_key = None
+            if link:
+                # keep only scheme+netloc+path; drop query/fragment
+                from urllib.parse import urlsplit, urlunsplit
+                s = urlsplit(link)
+                link_key = urlunsplit((s.scheme, s.netloc, s.path, "", ""))
+
+            key = (origin_iata, dest_iata, departure_ts, arrival_ts, link_key)
+            if key in seen_keys:
+                if self.debug:
+                    self.dbg.add(f"skip[{idx}]=duplicate_card {key}")
+                continue
+            seen_keys.add(key)
+            # ------------------------------------------
 
             rows.append({
                 "source": self.name,
