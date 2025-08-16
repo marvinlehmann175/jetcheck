@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import FlightCard from '@/components/FlightCard';
+import { messages } from "./i18n.js";
+import { useI18n } from "@/app/_providers/I18nProvider";
 
 export default function Home() {
   const [flights, setFlights] = useState<any[] | null>(null);
@@ -22,6 +24,7 @@ export default function Home() {
   }, []);
 
   return (
+    
     <main className="content">
       <section className="hero hero--tight">
         <h1>Luxury travel, reimagined.</h1>

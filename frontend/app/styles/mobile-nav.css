@@ -1,0 +1,179 @@
+/* ================================
+   Mobile tabbar + mobile overrides
+   (import after nav.css)
+================================ */
+
+/* Visibility helpers */
+.only-desktop { display: block; }
+.only-mobile  { display: none; }
+
+@media (max-width: 720px) {
+  .only-desktop { display: none !important; }
+  .only-mobile  { display: block !important; }
+}
+
+/* ===== Mobile bottom pill container ===== */
+.mobile-tabbar {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  z-index: 95;
+  display: none;                   /* shown on mobile below */
+  justify-content: center;
+  padding: 0 12px;
+  overflow: hidden;
+  border-radius: 22px;
+}
+
+/* The glassy pill */
+.mobile-tabbar__pill {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: min(94vw, 760px);
+  padding: 0;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05))
+    rgba(12,12,14,.45);
+  border: 1px solid rgba(255,255,255,.22);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  box-shadow:
+    0 14px 36px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.14);
+  position: relative;
+}
+
+/* Inner micro-hairline to sell the glass */
+.mobile-tabbar__pill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.10);
+}
+
+/* Items inside the pill */
+.tab-item {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 10px 10px;
+  text-decoration: none;
+  color: var(--text);
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 18px;
+  border: 1px solid transparent;  /* prevents big focus ring */
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.tab-item:focus { outline: none; }
+.tab-item:focus-visible {
+  border-color: rgba(255,255,255,.28);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+}
+
+/* Active “cap”: pill inside the pill */
+.tab-item.is-active { color: #d4a214; }
+.tab-item.is-active::before {
+  content: "";
+  position: absolute;
+  inset: 1.5px;                   /* cap sits inside */
+  border-radius: 999px;
+  background:
+    radial-gradient(120px 60px at 50% 10%, rgba(255,255,255,.25), rgba(255,255,255,0) 65%),
+    linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.12)) rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.32);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.28),
+    0 6px 14px rgba(0,0,0,.22);
+  z-index: -1;                    /* keep icon/label above */
+}
+
+.tab-item.is-active .tab-icon svg {
+  filter: drop-shadow(0 0 8px rgba(212,162,20,.35));
+}
+
+.tab-item.is-disabled {
+  opacity: .55;
+  pointer-events: none;
+}
+
+.tab-icon  { line-height: 0; }
+.tab-label { font-size: 11px; font-weight: 800; letter-spacing: .2px; line-height: 1; }
+
+/* Small centered “Soon” chip over the icon */
+.tab-soon {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translate(-50%, -40%);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: #e5e7eb;
+  border: 1px solid rgba(255,255,255,.26);
+  background: rgba(255,255,255,.14);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+.mobile-tabbar-spacer { display: none; }
+
+/* ===== All mobile overrides in ONE block ===== */
+@media (max-width: 720px) {
+  /* Show tabbar & spacer */
+  .mobile-tabbar { display: flex; }
+  .mobile-tabbar-spacer { display: block; height: calc(74px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Hide desktop nav & blob */
+  .topnav, .nav-blob { display: none !important; }
+
+  /* Compact header layout: Brand | spacer | Utils (right aligned) */
+  .topbar__shell {
+    grid-template-columns: auto 1fr auto !important;
+    width: min(94vw, 760px);
+    padding: 4px 10px !important;
+    gap: 10px !important;
+  }
+  .brand { justify-self: start; }
+
+  .topnav__utils {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  /* White Sign In pill */
+  .topnav__utils .util-like--primary {
+    background: #fff !important;
+    color: #0c0c0d !important;
+    font-weight: 800;
+    border-radius: 999px;
+    padding: 8px 14px;
+    border-color: transparent !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  }
+
+  /* Language switch spacing */
+  .lang-wrapper .lang-switch { padding: 8px 12px; }
+}
+
+/* Reduced-transparency fallback */
+@media (prefers-reduced-transparency: reduce) {
+  .mobile-tabbar__pill {
+    background: #111214;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-color: #1f2026;
+    box-shadow: 0 10px 28px rgba(0,0,0,.4);
+  }
+}

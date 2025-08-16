@@ -3,7 +3,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./styles/nav.css";
 import "./styles/controls.css";
+import "./styles/flightcard.css";
+import "./styles/mobile-nav.css";
 import Header from "@/components/Header";
+import MobileTabBar from "@/components/MobileTabBar";
 import Footer from "@/components/Footer";
 import Providers from "@/app/Providers";
 import { cookies } from "next/headers";
@@ -40,6 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Providers initialLang={initialLang}>
           <div className="screen">
             <Header />
+            <MobileTabBar />
             {children}
             <Footer />
           </div>

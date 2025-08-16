@@ -1,93 +1,91 @@
-/* ================================
-   Controls Bar (Glassy, Docking)
-================================ */
-
-/* Base wrapper (not sticky by default; IO toggles fixed mode) */
+/* ===== Controls (transparent shell) ===== */
 .controls-bar {
-  position: relative;
-  z-index: 10;
-  margin: 10px auto 12px;
-  padding: 0 20px; /* page gutter */
+  position: sticky;
+  /* sit just below the floating topbar (72px spacer) */
+  top: calc(env(safe-area-inset-top, 0px) + 72px + 10px);
+  z-index: 40;
+  padding: 10px 20px;
+  background: transparent;
 }
 
-/* The pill shell */
 .controls-bar__shell {
   max-width: 1200px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: auto 1fr; /* filter button | selects */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  /* make only the bubbles clickable */
+  pointer-events: none;
+}
+
+.controls-left,
+.controls-right {
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.10);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))
-    rgba(10,10,10,.45);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
-  box-shadow: 0 8px 24px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+  pointer-events: auto;
 }
 
-/* Floating (docked under the glass nav) */
-.controls-bar--floating {
-  position: fixed;
-  top: calc(72px + 12px); /* keep in sync with TOPBAR_H + spacing */
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(98vw, 1240px);
-  z-index: 80;
-  padding: 0;
-}
-.controls-bar--floating .controls-bar__shell {
-  max-width: 100%;
-  border-color: rgba(212,162,20,.35); /* gold edge */
-  box-shadow:
-    0 14px 36px rgba(0,0,0,.55),
-    inset 0 1px 0 rgba(255,255,255,.08);
-}
+/* ===== Glassy bubbles ===== */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
 
-/* Inputs on glass */
-.controls-bar .select {
   background: rgba(255,255,255,.06);
   border: 1px solid rgba(255,255,255,.12);
   color: var(--text);
-  border-radius: 999px;
-  padding: 8px 12px;
-  min-height: 36px;
-  backdrop-filter: blur(8px);
+
+  backdrop-filter: blur(10px) saturate(140%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+
+  font-weight: 700;
+  letter-spacing: .2px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease, transform .12s ease;
 }
-.controls-bar .select:focus {
-  border-color: rgba(212,162,20,.6);
-  box-shadow: 0 0 0 3px rgba(212,162,20,.22);
-  outline: none;
+.pill:hover {
+  background: rgba(255,255,255,.08);
+  border-color: rgba(255,255,255,.18);
+}
+.pill:active { transform: translateY(1px); }
+
+/* Button variant (Filter) */
+.pill--action {}
+
+/* Selects as pills (remove native look, keep arrows) */
+.pill--select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255,255,255,.6) 50%),
+    linear-gradient(135deg, rgba(255,255,255,.6) 50%, transparent 50%),
+    linear-gradient(to right, transparent, transparent);
+  background-position:
+    calc(100% - 18px) calc(50% - 3px),
+    calc(100% - 12px) calc(50% - 3px),
+    0 0;
+  background-size: 6px 6px, 6px 6px, 100% 100%;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+  cursor: pointer;
+}
+.pill--select option {
+  color: #0c0c0d; /* readable in native dropdown */
 }
 
-/* Filter button */
-.controls-bar .btn-filter {
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  padding: 8px 12px;
-  font-weight: 800;
-  letter-spacing: .1px;
-}
-.controls-bar .btn-filter:hover {
-  border-color: rgba(212,162,20,.45);
-  background: rgba(212,162,20,.12);
-  color: #d4a214;
-  text-shadow: 0 0 14px rgba(212,162,20,.25);
-}
-
-/* Responsive */
-@media (max-width: 700px) {
-  .controls-bar__shell {
-    grid-template-columns: 1fr;
-  }
-  .controls-bar .selects {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
+/* Mobile */
+@media (max-width: 640px) {
+  .controls-bar { top: calc(env(safe-area-inset-top, 0px) + 60px + 8px); }
+  .controls-bar__shell { gap: 10px; }
+  .controls-right { gap: 8px; }
+  .pill { height: 38px; padding: 0 12px; font-size: 14px; }
+  .pill--select { padding-right: 30px; }
 }

@@ -1,151 +1,205 @@
 "use client";
 
-import LocalTime from '@/components/LocalTime';
-import { parsePgTimestamptz, dayLabel, formatLocalDate } from '@/utils/time';
+import Link from "next/link";
 
-function fmtPrice(amount, currency = "EUR") {
-  if (amount == null) return null;
+function fmtMoney(n, currency = "USD") {
+  if (typeof n !== "number" || Number.isNaN(n)) return null;
   try {
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency,
-      maximumFractionDigits: 0,
-    }).format(Number(amount));
+    }).format(n);
   } catch {
-    return `${amount} ${currency}`;
+    return `${Math.round(n).toLocaleString()} ${currency}`;
   }
 }
 
-function timeAgo(ts) {
-  if (!ts) return null;
-  const diffMs = Date.now() - parsePgTimestamptz(ts).getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "now";
-  if (diffMin < 60) return `${diffMin} min ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH} h ago`;
-  const diffD = Math.floor(diffH / 24);
-  return `${diffD} d ago`;
+function timeAgo(iso) {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const d = Math.round(hr / 24);
+  return `${d}d ago`;
+}
+
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
+function parts(iso) {
+  if (!iso) return { date: "", time: "" };
+  const d = new Date(iso);
+  const DD = String(d.getDate()).padStart(2, "0");
+  const MMMM = MONTHS[d.getMonth()];
+  const YYYY = d.getFullYear();
+  return {
+    date: `${DD}. ${MMMM} ${YYYY}`,
+    time: d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+function dayChip(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dd = new Date(d);
+  dd.setHours(0, 0, 0, 0);
+  const diff = Math.round((dd.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return <span className="chip chip--today">Today</span>;
+  if (diff === 1) return <span className="chip chip--tomorrow">Tomorrow</span>;
+  return null;
 }
 
 export default function FlightCard({ flight }) {
-  if (!flight) return null;
-
   const {
-    source,
-    origin_iata, origin_name, origin_tz,
-    destination_iata, destination_name, destination_tz,
-    departure_ts, arrival_ts,
-    link_latest,
+    id,
+    origin_iata,
+    origin_name,
+    destination_iata,
+    destination_name,
+    departure_ts,
+    arrival_ts,
+    aircraft,
     price_current,
     price_normal,
-    discount_percent,
+    currency_effective,
     status_latest,
+    status,
     last_seen_at,
-  } = flight;
+    link_latest,
+  } = flight || {};
 
-  const oCode = (origin_iata || "—").toUpperCase();
-  const dCode = (destination_iata || "—").toUpperCase();
-  const oName = origin_name || oCode;
-  const dName = destination_name || dCode;
-
-  const priceLabel = fmtPrice(price_current, "EUR");
-  const normalPriceLabel = price_normal != null ? fmtPrice(price_normal, "EUR") : null;
-
-  const dayChip = `${dayLabel(departure_ts, origin_tz)} · ${formatLocalDate(departure_ts, origin_tz)}`;
-
-  const showDiscount =
-    discount_percent != null && !Number.isNaN(Number(discount_percent));
-
+  const statusVal = String(status_latest ?? status ?? "").toLowerCase();
   const statusText =
-    status_latest?.toLowerCase() === "pending" ? "Pending" : status_latest || "";
+    statusVal === "available"
+      ? "Available"
+      : statusVal === "pending"
+      ? "Pending"
+      : statusVal
+      ? statusVal.charAt(0).toUpperCase() + statusVal.slice(1)
+      : "Status";
+
+  const dotClass =
+    statusVal === "available"
+      ? "dot--ok"
+      : statusVal === "pending"
+      ? "dot--warn"
+      : "dot--muted";
+
+  const dep = parts(departure_ts);
+  const arr = parts(arrival_ts);
+
+  const currentPrice = fmtMoney(
+    typeof price_current === "number"
+      ? price_current
+      : typeof price_normal === "number"
+      ? price_normal
+      : NaN,
+    currency_effective || "USD"
+  );
+
+  const hasAircraft = !!(aircraft && String(aircraft).trim());
+  const aircraftHref = hasAircraft
+    ? `/aircraft/${encodeURIComponent(aircraft)}`
+    : null;
 
   return (
-    <article className="card flightcard">
-      {/* Top row */}
+    <div className="card flightcard" data-id={id}>
+      {/* Top chips (left-aligned): Today/Tomorrow + Status */}
       <div className="flightcard__toprow">
-        <div className="chip chip--date">{dayChip}</div>
-        {statusText && (
-          <div className={`chip chip--status status-chip status-chip--${String(status_latest || "").toLowerCase()}`}>
+        <div className="flightcard__chips">
+          {dayChip(departure_ts)}
+          <span className="chip chip--status">
+            <span className={`status-dot ${dotClass}`} />
             {statusText}
-          </div>
-        )}
-      </div>
-
-      {/* Airports & times */}
-      <div className="flightcard__airports">
-        <div className="flightcard__airport">
-          <div className="flightcard__name">{oName}</div>
-          <div className="flightcard__code">{oCode}</div>
-          <LocalTime ts={departure_ts} tz={origin_tz} stacked className="flightcard__dt" />
-        </div>
-
-        <div className="flightcard__arrow" aria-hidden>—</div>
-
-        <div className="flightcard__airport flightcard__airport--right">
-          <div className="flightcard__name">{dName}</div>
-          <div className="flightcard__code">{dCode}</div>
-          <LocalTime ts={arrival_ts} tz={destination_tz || origin_tz} stacked className="flightcard__dt" />
-        </div>
-      </div>
-
-      {/* Price / CTA or Pending */}
-      {priceLabel ? (
-        <div className="info-box">
-          <div className="info-main">
-            <div className="info-title">{priceLabel}</div>
-            {(normalPriceLabel || showDiscount) && (
-              <div className="info-sub">
-                {normalPriceLabel && (
-                  <span className="info-label">
-                    <span className="info-compare">{normalPriceLabel}</span>
-                  </span>
-                )}
-                {showDiscount && (
-                  <span className="info-badge">−{Math.round(discount_percent)}%</span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {link_latest && (
-            <a
-              className="btn btn--book btn--book-inline"
-              href={link_latest}
-              target="_blank"
-              rel="noreferrer"
-              aria-label={`Book flight ${oCode} to ${dCode}`}
-            >
-              ✈ Book now
-            </a>
-          )}
-        </div>
-      ) : (
-        <div className="info-box info-box--stack">
-          <div className="info-title">Flight not confirmed yet</div>
-          {Number.isFinite(flight?.probability) && (
-            <div className="info-sub">
-              <span className="info-label">Probability</span>
-              <span className="info-badge info-badge--prob">
-                ~{Math.round(Number(flight.probability) * 100)}%
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="card__meta">
-        <div className="meta-left">
-          <span className={`opby-text opby--${(source || "").toLowerCase()}`}>
-            Operated by <strong>{source || "—"}</strong>
           </span>
         </div>
-        <div className="meta-right">
-          {last_seen_at && (
-            <span className="meta-updated">updated {timeAgo(last_seen_at)}</span>
-          )}
+        <div />
+      </div>
+
+      {/* Airports */}
+      <div className="flightcard__airports">
+        <div className="flightcard__airport">
+          <span className="flightcard__label">Departure</span>
+          <div className="flightcard__code">
+            {(origin_iata || "").toUpperCase()}
+          </div>
+          <div className="flightcard__name">
+            {origin_name || origin_iata || "—"}
+          </div>
+          <div className="flightcard__dt flightcard__dt--stack">
+            <span className="flightcard__date">{dep.date}</span>
+            <span className="flightcard__time">{dep.time}</span>
+          </div>
+        </div>
+
+        <div className="flightcard__arrow">→</div>
+
+        <div className="flightcard__airport flightcard__airport--right">
+          <span className="flightcard__label">Arrival</span>
+          <div className="flightcard__code">
+            {(destination_iata || "").toUpperCase()}
+          </div>
+          <div className="flightcard__name">
+            {destination_name || destination_iata || "—"}
+          </div>
+          <div className="flightcard__dt flightcard__dt--stack">
+            <span className="flightcard__date">{arr.date}</span>
+            <span className="flightcard__time">{arr.time}</span>
+          </div>
         </div>
       </div>
-    </article>
+
+      <div className="info-row">
+        {/* Row 1: Aircraft */}
+        <div className="info-row__line">
+          <div className="info-cell--aircraft">Aircraft</div>
+          <div className="info-cell--aircraft-name">
+            {flight?.aircraft ? <a href="#">{flight.aircraft}</a> : "Unknown"}
+          </div>
+        </div>
+
+        {/* Row 2: Price + CTA */}
+        <div className="info-row__line">
+          <div className="info-cell--price">
+            {flight?.price_current
+              ? `€ ${flight.price_current.toLocaleString()}`
+              : "—"}
+          </div>
+          <div className="info-cell--cta">
+            <button className="btn--book-cta">
+              Book
+              <span className="btn-sheen"></span>
+              <span className="btn-glow"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer with updated-ago */}
+      <div className="card__footer">
+        <div className="updated-footnote">
+          {timeAgo(last_seen_at) ? `Updated ${timeAgo(last_seen_at)}` : ""}
+        </div>
+      </div>
+    </div>
   );
 }

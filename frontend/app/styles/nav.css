@@ -24,15 +24,15 @@
   gap: 14px;
   padding: 12px 16px;
   border-radius: 18px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   background:
-    linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02))
-    rgba(10,10,10,.45);
-  backdrop-filter: saturate(160%) blur(14px);
-  -webkit-backdrop-filter: saturate(160%) blur(14px);
+    linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03))
+    rgba(12,12,14,.52);
+  border: 1px solid rgba(255,255,255,.18);          /* primary edge */
+  backdrop-filter: blur(16px) saturate(170%);        /* crisper frost */
+  -webkit-backdrop-filter: blur(16px) saturate(170%);
   box-shadow:
-    0 8px 30px rgba(0,0,0,.45),
-    inset 0 1px 0 rgba(255,255,255,.06);
+    0 10px 36px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.10); 
 }
 
 /* Subtle inner highlight ring */
@@ -40,9 +40,11 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 18px;
+  border-radius: inherit;
   pointer-events: none;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.10),          /* inner crisp line */
+    inset 0 0 24px rgba(255,255,255,.06);           /* subtle bloom */
 }
 
 /* Liquid “water-drop” blob (driven by --blob-x/--blob-w) */
@@ -56,10 +58,12 @@
   width: var(--blob-w);
   height: 36px;
   border-radius: 999px;
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.16);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  border: 1px solid rgba(255,255,255,.22);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04))
+    rgba(255,255,255,.06);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
   transition:
     left 320ms cubic-bezier(.22,.61,.36,1),
     width 260ms cubic-bezier(.22,.61,.36,1),
@@ -140,7 +144,7 @@
 }
 .soon-badge {
   position: absolute;
-  top: -2px;           /* 5px lower than earlier -7/-6 */
+  top: -13px;           /* 5px lower than earlier -7/-6 */
   right: -6px;
   transform: translate(0, -10%);
   padding: 2px 7px;
@@ -172,6 +176,15 @@
   line-height: 1;
   cursor: pointer;
 }
+  .topnav__utils .util-like--primary {
+    background: #fff;
+    color: #0c0c0d;
+    font-weight: 800;
+    border-radius: 999px;
+    padding: 8px 14px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.25);
+  }
+
 .util-like:hover {
   background: rgba(255,255,255,.05);
   border-color: rgba(255,255,255,.16);
@@ -234,27 +247,3 @@
 
 /* Spacer (push content below floating nav) */
 .topbar-spacer { height: 72px; }
-
-/* Responsive tweaks */
-@media (max-width: 640px) {
-  .topbar__shell {
-    grid-template-columns: auto 1fr auto;
-    gap: 10px;
-    padding: 10px 12px;
-    width: min(96vw, 760px);
-  }
-  .topbar-spacer { height: 60px; }
-  .topnav { gap: 10px; }
-  .topnav__link { padding: 8px 12px; font-size: 14px; min-height: 34px; }
-}
-
-/* Reduced transparency preference */
-@media (prefers-reduced-transparency: reduce) {
-  .topbar__shell,
-  .nav-blob {
-    background: #111214;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border-color: #1f2026;
-  }
-}

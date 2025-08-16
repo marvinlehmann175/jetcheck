@@ -1,0 +1,269 @@
+/* ================================
+   Card (glassy base) + Flightcard
+==================================*/
+
+.card {
+  position: relative;
+  background: rgba(20, 20, 25, 0.55);
+  backdrop-filter: blur(14px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.45);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(212,162,20,0.6);
+  box-shadow: 0 20px 40px rgba(0,0,0,.6);
+}
+
+/* Inner flightcard layout */
+.flightcard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: relative;
+  min-height: 260px;
+  padding: 18px;
+}
+
+/* Top row: chips on the right */
+.flightcard__toprow { display:flex; align-items:center; justify-content:space-between; }
+.flightcard__chips { display:flex; gap:8px; align-items:center; }
+
+/* Airports row */
+.flightcard__airports {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 18px;
+}
+.flightcard__airport {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  align-items: flex-start;
+  gap: 4px;
+}
+.flightcard__airport--right { align-items: flex-end; text-align: right; }
+.flightcard__airport--right .flightcard__dt { align-items: flex-end; text-align: right; }
+
+/* Airports: keep date/time below the airport name (we already render them there) */
+.flightcard__dt { display:flex; }
+.flightcard__dt--stack { flex-direction:column; gap:2px; }
+
+/* Labels & text */
+.flightcard__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  color: rgba(255,255,255,.70);
+  text-transform: uppercase;
+}
+.flightcard__time {
+  font-weight: 700;
+  font-size: .875rem;
+  color: #fff;
+  opacity: .95;
+}
+.flightcard__code {
+  font-size: clamp(22px, 4vw, 30px);
+  font-weight: 800;
+  letter-spacing: .5px;
+  line-height: 1.1;
+  margin-top: 2px;
+  color: #fff;
+}
+.flightcard__name {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+.flightcard__arrow {
+  align-self: center;
+  font-weight: 800;
+  color: rgba(212,162,20,1);
+  font-size: 18px;
+  letter-spacing: .12em;
+}
+
+/* Meta row (aircraft + status/date/etc.) */
+.flightcard__meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 10px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* Labels/values (reuse your old styles) */
+.meta-label { font-weight:800; font-size:12px; letter-spacing:.2px; color:rgba(255,255,255,.7); text-transform:uppercase; }
+.meta-value { font-weight:700; color:#fff; }
+.meta-value--link { color:#d4a214; text-decoration:none; }
+.meta-value--link:hover { text-decoration:underline; }
+
+
+/* Info box (glass) */
+.info-box {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.info-box--stack { flex-direction: column; align-items: flex-start; }
+.info-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; margin-bottom: 0; }
+.info-title { font-weight: 700; color: #fff; font-size: 16px; letter-spacing: .2px; margin: 0; }
+.info-sub { display: inline-flex; align-items: center; gap: 8px; margin-top: 0; }
+.info-label { font-size: 12px; font-weight: 600; letter-spacing: .2px; color: var(--muted); opacity: .95; }
+.info-compare { opacity: .6; text-decoration: line-through; font-weight: 600; color: rgba(255,255,255,0.55); }
+
+/* Status + probability badges */
+.info-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  background: rgba(16,185,129,0.12);
+  border: 1px solid rgba(16,185,129,0.35);
+  color: var(--ok);
+}
+.info-badge--prob {
+  background: rgba(212,162,20,0.15);
+  border: 1px solid rgba(212,162,20,0.4);
+  color: rgba(212,162,20,1);
+}
+
+/* ===== Inner glass row: Aircraft | Price | Book ===== */
+.info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 10px;
+
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.info-row__line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+
+
+/* Aircraft row */
+.info-cell--aircraft {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.info-cell--aircraft-name {
+  font-weight: 700;
+  color: #fff;
+}
+.info-cell--aircraft-name a {
+  color: #d4a214;
+  text-decoration: none;
+}
+.info-cell--aircraft-name a:hover {
+  text-decoration: underline;
+}
+
+/* Price row */
+.info-cell--price {
+  font-weight: 800;
+  font-size: clamp(15px, 2vw, 17px);
+  letter-spacing: .2px;
+  color: #fff;
+}
+.info-cell--cta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Chips (today/tomorrow/status/etc.) */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+.chip--date { opacity: .95; }
+.chip--today    { color: var(--ok);       border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.12); }
+.chip--tomorrow { color: var(--brand-2);  border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.12); }
+.chip--upcoming { color: var(--muted);    border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.04); }
+.chip--status   { font-weight: 800; color: var(--muted); background: rgba(255,255,255,0.05); }
+.chip--deal     { color: rgba(212,162,20,1); border-color: rgba(212,162,20,0.45); background: rgba(212,162,20,0.15); }
+.chip--soon     { color:#60a5fa; border-color: rgba(59,130,246,0.35); background: rgba(59,130,246,0.12); }
+.chip--prob     { color: var(--brand-2); border-color: rgba(34,211,238,0.35); background: rgba(34,211,238,0.12); }
+
+/* Status dot inside chip--status */
+.chip--status { gap:8px; }
+.status-dot { width:8px; height:8px; border-radius:999px; display:inline-block; box-shadow: 0 0 10px rgba(0,0,0,.35); }
+.status-dot.dot--ok   { background:#10b981; }
+.status-dot.dot--warn { background:#f59e0b; }
+.status-dot.dot--muted{ background:#6b7280; }
+
+
+/* Price sizing smaller */
+.price-now { font-weight: 800; letter-spacing:.2px; color:#fff; }
+.price-now--tight { font-size: clamp(16px, 2.1vw, 18px); }
+.price-now--muted { color: var(--muted); font-weight:700; }
+
+/* Fancy primary book button (your existing styles) */
+.btn--book-cta {
+  position:relative; display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; padding:10px 16px; font-weight:800; border:none; border-radius:999px;
+  background:#fff; color:#0c0c0d; text-decoration:none; cursor:pointer;
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+  overflow:hidden; isolation:isolate;
+}
+.btn--book-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(0,0,0,.55); filter: saturate(115%); }
+.btn--book-cta:active { transform: translateY(0); }
+.btn--book-cta.btn--disabled { pointer-events:none; opacity:.6; }
+.btn--book-cta .btn-sheen { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(120deg, rgba(255,255,255,.45), rgba(255,255,255,0) 30%); mix-blend-mode: soft-light; transform: translateX(-120%); transition: transform .6s cubic-bezier(.22,.61,.36,1); }
+.btn--book-cta:hover .btn-sheen { transform: translateX(120%); }
+.btn--book-cta .btn-glow { content:""; position:absolute; inset:-10px; border-radius:inherit; pointer-events:none; box-shadow: 0 0 0 0 rgba(212,162,20,.0), 0 0 30px 6px rgba(212,162,20,.18); transition: box-shadow .2s ease; }
+.btn--book-cta:hover .btn-glow { box-shadow: 0 0 0 2px rgba(212,162,20,.55), 0 0 36px 10px rgba(212,162,20,.28); }
+
+/* Footer: fine divider + small updated text */
+.card__footer { margin-top:14px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08); }
+.updated-footnote { font-size:11px; color: var(--muted); }
+
+/* Responsive */
+@media (max-width:640px) {
+  .info-box { flex-direction: column; align-items: stretch; }
+  .btn--book-cta { width: 100%; text-align: center; }
+  .info-row { grid-template-columns: 1fr; gap:10px; }
+  .info-cell--price { justify-self:start; text-align:left; }
+  .info-cell--cta { justify-self:start; }
+}

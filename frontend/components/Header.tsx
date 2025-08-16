@@ -1,3 +1,4 @@
+// components/Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -5,8 +6,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { useI18n } from "@/app/_providers/I18nProvider";
-
-const FLAG: Record<"en" | "de", string> = { en: "🇺🇸", de: "🇩🇪" };
 
 const NAV = [
   { href: "/private-jet", label: "Private Jet" },
@@ -18,37 +17,24 @@ export default function Header() {
   const pathname = usePathname();
   const { lang, setLang, ready } = useI18n();
 
-  // refs
   const shellRef = useRef<HTMLDivElement | null>(null);
-  const navRef = useRef<HTMLElement | null>(null);
   const blobRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
   const brandRef = useRef<HTMLAnchorElement | null>(null);
-  const linksRef = useRef<HTMLAnchorElement[]>([]); // anchors order: [brand, ...NAV]
-
+  const linksRef = useRef<HTMLAnchorElement[]>([]);
   const [showLang, setShowLang] = useState(false);
-
-  // callback ref factory (note: +1 because brand is index 0)
-  const setLinkRef =
-    (i: number) =>
-    (el: HTMLAnchorElement | null): void => {
-      if (el) linksRef.current[i + 1] = el;
-    };
 
   const moveBlob = (el?: HTMLElement | null) => {
     const blob = blobRef.current;
     const shell = shellRef.current;
     if (!blob || !shell || !el) return;
-
     const shellRect = shell.getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    const x = r.left - shellRect.left;
-    const w = r.width;
-
-    blob.style.setProperty("--blob-x", `${x}px`);
-    blob.style.setProperty("--blob-w", `${w}px`);
+    blob.style.setProperty("--blob-x", `${r.left - shellRect.left}px`);
+    blob.style.setProperty("--blob-w", `${r.width}px`);
   };
 
-  // collect anchors once mounted
+  // collect anchor refs (brand + nav)
   useLayoutEffect(() => {
     const arr: HTMLAnchorElement[] = [];
     if (brandRef.current) arr.push(brandRef.current);
@@ -62,49 +48,19 @@ export default function Header() {
     linksRef.current = arr;
   }, []);
 
-  // position blob under active on route change
+  // position blob under active item (desktop only; blob hidden on mobile via CSS)
   useEffect(() => {
     const anchors = linksRef.current;
     if (!anchors.length) return;
-
     const activeIdx = NAV.findIndex((n) => pathname?.startsWith(n.href));
-    // +1 because anchors[0] = brand
-    const target = anchors[activeIdx >= 0 ? activeIdx + 1 : 0] || anchors[0];
-
+    const target = anchors[activeIdx >= 0 ? activeIdx + 1 : 0] || anchors[0]; // +1 because brand is 0
     requestAnimationFrame(() => moveBlob(target));
   }, [pathname]);
 
-  // recalc on resize / layout shifts
-  useEffect(() => {
-    const onResize = () => {
-      const anchors = linksRef.current;
-      if (!anchors.length) return;
-      const activeIdx = NAV.findIndex((n) => pathname?.startsWith(n.href));
-      moveBlob(anchors[activeIdx >= 0 ? activeIdx + 1 : 0] || anchors[0]);
-    };
-
-    const ro = new ResizeObserver(onResize);
-    if (shellRef.current) ro.observe(shellRef.current);
-    window.addEventListener("resize", onResize);
-    const raf = requestAnimationFrame(onResize);
-
-    return () => {
-      window.removeEventListener("resize", onResize);
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-    };
-  }, [pathname]);
-
-  const handleMouseLeave = () => {
-    const anchors = linksRef.current;
-    if (!anchors.length) return;
-    const activeIdx = NAV.findIndex((n) => pathname?.startsWith(n.href));
-    moveBlob(anchors[activeIdx >= 0 ? activeIdx + 1 : 0] || anchors[0]);
-  };
+  const FLAG: Record<"en" | "de", string> = { en: "🇺🇸", de: "🇩🇪" };
 
   return (
     <>
-      {/* goo filter */}
       <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden>
         <filter id="goo">
           <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
@@ -123,15 +79,11 @@ export default function Header() {
       </svg>
 
       <div className="topbar topbar--glass">
-        <div
-          ref={shellRef}
-          className="topbar__shell"
-          onMouseLeave={handleMouseLeave}
-        >
-          {/* blob lives under brand + nav */}
-          <div ref={blobRef} className="nav-blob" />
+        <div ref={shellRef} className="topbar__shell">
+          {/* Blob sits under brand+nav (hidden on mobile via CSS) */}
+          <div ref={blobRef} className="nav-blob only-desktop" />
 
-          {/* brand participates in blob (index 0) */}
+          {/* Brand */}
           <div className="brand">
             <Link
               href="/"
@@ -145,27 +97,25 @@ export default function Header() {
             </Link>
           </div>
 
-          {/* primary nav */}
+          {/* Primary nav (desktop only) */}
           <nav
             ref={navRef}
-            className="topnav"
+            className="topnav only-desktop"
             role="navigation"
             aria-label="Primary"
           >
-            {NAV.map((item, i) => {
+            {NAV.map((item) => {
               const active = pathname?.startsWith(item.href);
               const disabled = !!item.disabled;
               return (
                 <span key={item.href} className="topnav__item">
                   <Link
                     href={disabled ? "#" : item.href}
-                    ref={setLinkRef(i)}
                     className={clsx(
                       "topnav__link",
                       active && "topnav__link--active",
                       disabled && "topnav__link--disabled"
                     )}
-                    aria-current={active ? "page" : undefined}
                     aria-disabled={disabled || undefined}
                     tabIndex={disabled ? -1 : 0}
                     onMouseEnter={(e) => !disabled && moveBlob(e.currentTarget)}
@@ -178,7 +128,7 @@ export default function Header() {
             })}
           </nav>
 
-          {/* right utils */}
+          {/* Utils (both desktop + mobile) */}
           <div className="topnav__utils">
             <Link href="/signin" className="util-like util-like--primary">
               Sign In

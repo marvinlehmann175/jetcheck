@@ -100,25 +100,36 @@ export default function Home() {
   }, []);
 
   // --- fetch --------------------------------------------------------------
+  // fetch flights once on mount
   useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
+    let cancelled = false;
 
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        // if sentinel is NOT fully in view (i.e. has crossed the sticky line) → float
-        setFloating(entry.isIntersecting === false);
-      },
-      {
-        // push the top boundary down by the nav height so we stick under it
-        root: null,
-        rootMargin: `-${TOPBAR_H + 12}px 0px 0px 0px`,
-        threshold: 1.0,
+    const run = async () => {
+      setError("");
+      setLoading(true);
+      try {
+        const url = `${API_BASE}/api/flights?page_size=200&sort_key=departure_ts&sort_dir=asc`;
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (!cancelled) {
+          setFlights(Array.isArray(data) ? (data as Flight[]) : []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError("Failed to load flights");
+          setFlights([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-    );
+    };
 
-    io.observe(el);
-    return () => io.disconnect();
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // --- helpers ------------------------------------------------------------
@@ -296,31 +307,24 @@ export default function Home() {
         </p>
       </section>
 
-      {/* Sentinel just before the controls; when it scrolls past the top margin we float the bar */}
-      <div ref={sentinelRef} style={{ height: 1 }} />
-
-      {/* Placeholder to prevent layout jumps when the bar becomes fixed */}
-      {floating && <div style={{ height: barH }} />}
-
-      <section
-        ref={barRef as any}
-        className={`controls-bar ${floating ? "controls-bar--floating" : ""}`}
-        aria-label="Search controls"
-      >
+      {/* Controls: transparent shell, left filter, right sorts */}
+      <section className="controls-bar">
         <div className="controls-bar__shell">
-          <button
-            className="btn btn-filter"
-            onClick={() => setShowFilters(true)}
-            aria-expanded={showFilters ? "true" : "false"}
-            aria-controls="filters-drawer"
-          >
-            {t("filters.button", "🔎 Filters")}{" "}
-            {activeFilters > 0 ? `(${activeFilters})` : ""}
-          </button>
+          <div className="controls-left">
+            <button
+              className="pill pill--action"
+              onClick={() => setShowFilters(true)}
+              aria-expanded={showFilters ? "true" : "false"}
+              aria-controls="filters-drawer"
+            >
+              {t("filters.button", "Filter")}
+              {activeFilters > 0 ? ` (${activeFilters})` : ""}
+            </button>
+          </div>
 
-          <div className="selects">
+          <div className="controls-right">
             <select
-              className="select"
+              className="pill pill--select"
               value={sortKey}
               onChange={(e) =>
                 setSortKey(e.target.value as "departure" | "price" | "seen")
@@ -333,8 +337,9 @@ export default function Home() {
               <option value="price">{t("sort.price", "Price")}</option>
               <option value="seen">{t("sort.seen", "Last Seen")}</option>
             </select>
+
             <select
-              className="select"
+              className="pill pill--select"
               value={sortDir}
               onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
               aria-label={t("sort.direction", "Sort direction")}
