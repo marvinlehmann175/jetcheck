@@ -1,23 +1,7 @@
 "use client";
 
 import LocalTime from '@/components/LocalTime';
-import { parsePgTimestamptz } from '@/utils/time';
-import { dayLabel } from '@/utils/time';
-
-
-// tiny helpers
-function fmtDate(ts) {
-  if (!ts) return "—";
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(parsePgTimestamptz(ts));
-  } catch {
-    return "—";
-  }
-}
+import { parsePgTimestamptz, dayLabel, formatLocalDate } from '@/utils/time';
 
 function fmtPrice(amount, currency = "EUR") {
   if (amount == null) return null;
@@ -49,13 +33,9 @@ export default function FlightCard({ flight }) {
 
   const {
     source,
-    origin_iata,
-    origin_name,
-    destination_iata,
-    destination_name,
-    departure_ts,
-    arrival_ts,
-    aircraft,
+    origin_iata, origin_name, origin_tz,
+    destination_iata, destination_name, destination_tz,
+    departure_ts, arrival_ts,
     link_latest,
     price_current,
     price_normal,
@@ -69,32 +49,24 @@ export default function FlightCard({ flight }) {
   const oName = origin_name || oCode;
   const dName = destination_name || dCode;
 
-  const depDate = fmtDate(departure_ts); // date chip
-  const priceLabel = fmtPrice(price_current, "EUR"); // we store/display EUR now
-  const normalPriceLabel =
-    price_normal != null ? fmtPrice(price_normal, "EUR") : null;
+  const priceLabel = fmtPrice(price_current, "EUR");
+  const normalPriceLabel = price_normal != null ? fmtPrice(price_normal, "EUR") : null;
+
+  const dayChip = `${dayLabel(departure_ts, origin_tz)} · ${formatLocalDate(departure_ts, origin_tz)}`;
 
   const showDiscount =
     discount_percent != null && !Number.isNaN(Number(discount_percent));
 
   const statusText =
-    status_latest?.toLowerCase() === "pending"
-      ? "Pending"
-      : status_latest || "";
-
-  const depChip = dayLabel(departure_ts); // "Today" | "Tomorrow" | "Upcoming"
+    status_latest?.toLowerCase() === "pending" ? "Pending" : status_latest || "";
 
   return (
     <article className="card flightcard">
       {/* Top row */}
       <div className="flightcard__toprow">
-        <div className="chip chip--date">{depChip}</div>
+        <div className="chip chip--date">{dayChip}</div>
         {statusText && (
-          <div
-            className={`chip chip--status status-chip status-chip--${String(
-              status_latest || ""
-            ).toLowerCase()}`}
-          >
+          <div className={`chip chip--status status-chip status-chip--${String(status_latest || "").toLowerCase()}`}>
             {statusText}
           </div>
         )}
@@ -105,19 +77,15 @@ export default function FlightCard({ flight }) {
         <div className="flightcard__airport">
           <div className="flightcard__name">{oName}</div>
           <div className="flightcard__code">{oCode}</div>
-          <div className="flightcard__dt">
-            <LocalTime mode="date" ts={departure_ts} className="flightcard__date" />
-            <LocalTime mode="time" ts={departure_ts} className="flightcard__time" />
-          </div>
+          <LocalTime ts={departure_ts} tz={origin_tz} stacked className="flightcard__dt" />
         </div>
+
         <div className="flightcard__arrow" aria-hidden>—</div>
+
         <div className="flightcard__airport flightcard__airport--right">
           <div className="flightcard__name">{dName}</div>
           <div className="flightcard__code">{dCode}</div>
-          <div className="flightcard__dt">
-            <LocalTime mode="date" ts={arrival_ts} className="flightcard__date" />
-            <LocalTime mode="time" ts={arrival_ts} className="flightcard__time" />
-          </div>
+          <LocalTime ts={arrival_ts} tz={destination_tz || origin_tz} stacked className="flightcard__dt" />
         </div>
       </div>
 
@@ -165,8 +133,6 @@ export default function FlightCard({ flight }) {
           )}
         </div>
       )}
-
-      {aircraft && <div className="aircraft">{aircraft}</div>}
 
       <div className="card__meta">
         <div className="meta-left">

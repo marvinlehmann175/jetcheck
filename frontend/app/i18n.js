@@ -40,7 +40,7 @@ export const messages = {
     "filters.close": "Schließen",
     "filters.status": "Status",
     "filters.all": "Alle",
-    "filters.any": "Alle",
+    "filters.any": "Beliebig",
     "filters.departure": "Abflug (Stadt/IATA)",
     "filters.destination": "Ziel (Stadt/IATA)",
     "filters.date": "Datum",

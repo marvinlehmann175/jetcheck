@@ -1,12 +1,14 @@
 {
   "name": "jetcheck-frontend",
   "version": "1.0.0",
+  "clsx": "^2.1.1",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "next": "^15.4.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

@@ -1,10 +1,11 @@
-import os
-import sys
+import sys, os
+sys.path.append(os.path.dirname(__file__))
 import flask
 import traceback
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
 from supabase import create_client, Client
+from common.airports import get_tz
 
 # Load .env locally; on Render env vars come from the dashboard
 load_dotenv()
@@ -79,11 +80,12 @@ def get_flights():
         return jsonify({"error": "Supabase client not configured"}), 500
     try:
         q = supabase.table("flights_public").select(
-            "id,source,origin_iata,origin_name,destination_iata,destination_name,"
+            "id,source,origin_iata,origin_name,origin_tz,"
+            "destination_iata,destination_name,destination_tz,"
             "departure_ts,arrival_ts,aircraft,"
             "price_current,"
             "status_latest,link_latest,last_seen_at,"
-            "canonical_hash,origin_lat,origin_lon,destination_lat,destination_lon"
+            "canonical_hash,origin_lat,origin_lon,destination_lat,destination_lon,origin_tz, destination_tz, discount_percent, price_normal"
         )
 
         # --- filters (all optional) ---
@@ -159,6 +161,11 @@ def get_flights():
 
         resp = q.execute()
         out = resp.data or []
+        for row in out:
+            if not row.get("origin_tz"):
+                row["origin_tz"] = get_tz(row["origin_iata"])
+            if not row.get("destination_tz"):
+                row["destination_tz"] = get_tz(row["destination_iata"])
 
         # make responses explicitly non-cacheable (optional)
         response = jsonify(out)

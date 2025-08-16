@@ -1,0 +1,93 @@
+/* ================================
+   Controls Bar (Glassy, Docking)
+================================ */
+
+/* Base wrapper (not sticky by default; IO toggles fixed mode) */
+.controls-bar {
+  position: relative;
+  z-index: 10;
+  margin: 10px auto 12px;
+  padding: 0 20px; /* page gutter */
+}
+
+/* The pill shell */
+.controls-bar__shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: auto 1fr; /* filter button | selects */
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02))
+    rgba(10,10,10,.45);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* Floating (docked under the glass nav) */
+.controls-bar--floating {
+  position: fixed;
+  top: calc(72px + 12px); /* keep in sync with TOPBAR_H + spacing */
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(98vw, 1240px);
+  z-index: 80;
+  padding: 0;
+}
+.controls-bar--floating .controls-bar__shell {
+  max-width: 100%;
+  border-color: rgba(212,162,20,.35); /* gold edge */
+  box-shadow:
+    0 14px 36px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+/* Inputs on glass */
+.controls-bar .select {
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  min-height: 36px;
+  backdrop-filter: blur(8px);
+}
+.controls-bar .select:focus {
+  border-color: rgba(212,162,20,.6);
+  box-shadow: 0 0 0 3px rgba(212,162,20,.22);
+  outline: none;
+}
+
+/* Filter button */
+.controls-bar .btn-filter {
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  padding: 8px 12px;
+  font-weight: 800;
+  letter-spacing: .1px;
+}
+.controls-bar .btn-filter:hover {
+  border-color: rgba(212,162,20,.45);
+  background: rgba(212,162,20,.12);
+  color: #d4a214;
+  text-shadow: 0 0 14px rgba(212,162,20,.25);
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .controls-bar__shell {
+    grid-template-columns: 1fr;
+  }
+  .controls-bar .selects {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+}

@@ -1,92 +1,151 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import FlightCard from "../components/FlightCard.jsx";
-import FiltersDrawer from "../components/FiltersDrawer.jsx";
-import { messages } from "./i18n";
+import { useEffect, useMemo, useState, useLayoutEffect, useRef } from "react";
+import FlightCard from "../../components/FlightCard.jsx";
+import FiltersDrawer from "../../components/FiltersDrawer.jsx";
+import { messages } from "../i18n.js";
+import { useI18n } from "@/app/_providers/I18nProvider";
+
+// --- types ---------------------------------------------------------------
+type Option = { value: string; label: string };
+
+export type Flight = {
+  id: string | number;
+  source?: string | null;
+
+  origin_iata?: string | null;
+  origin_name?: string | null;
+  origin_tz?: string | null;
+
+  destination_iata?: string | null;
+  destination_name?: string | null;
+  destination_tz?: string | null;
+
+  departure_ts?: string | null; // ISO "2025-08-16T09:12:00Z"
+  arrival_ts?: string | null;
+
+  aircraft?: string | null;
+
+  link_latest?: string | null;
+
+  currency_effective?: string | null;
+  price_current?: number | null;
+  price_normal?: number | null;
+  discount_percent?: number | null;
+
+  status?: string | null;
+  status_latest?: string | null;
+  last_seen_at?: string | null;
+
+  probability?: number | null;
+};
+
+// allow indexing messages by string safely
+type Dict = Record<string, string>;
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "https://jetcheck.onrender.com";
 
 export default function Home() {
   // --- i18n ---------------------------------------------------------------
-  const [lang] = useState("en"); // <- set your default language code here
-  const dict = messages?.[lang] || {};
-  const tt = (k, fb) => dict[k] ?? fb; // simple safe getter
+  const { t } = useI18n();
+  const [lang] = useState("en");
+  const dict: Dict = (messages as Record<string, Dict>)[lang] || {};
+  const tt = (k: string, fb: string) => dict[k] ?? fb;
 
   // --- data + ui state ----------------------------------------------------
-  const [flights, setFlights] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [flights, setFlights] = useState<Flight[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>("");
 
   // Filters
-  const [status, setStatus] = useState(""); // "", "available", "pending"
-  const [from, setFrom] = useState(""); // IATA
-  const [to, setTo] = useState(""); // IATA
-  const [date, setDate] = useState(""); // YYYY-MM-DD
-  const [maxPrice, setMaxPrice] = useState("");
-  const [aircraft, setAircraft] = useState("");
+  const [status, setStatus] = useState<string>(""); // "", "available", "pending"
+  const [from, setFrom] = useState<string>(""); // IATA
+  const [to, setTo] = useState<string>(""); // IATA
+  const [date, setDate] = useState<string>(""); // YYYY-MM-DD
+  const [maxPrice, setMaxPrice] = useState<string>("");
+  const [aircraft, setAircraft] = useState<string>("");
 
   // Sort/pagination
-  const [sortKey, setSortKey] = useState("departure"); // "departure" | "price" | "seen"
-  const [sortDir, setSortDir] = useState("asc"); // "asc" | "desc"
-  const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<"departure" | "price" | "seen">(
+    "departure"
+  );
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [page, setPage] = useState<number>(1);
   const pageSize = 12;
 
   // Drawer
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState<boolean>(false);
+
+  // --- floating controls (below the floating nav) ---------------------------
+  const TOPBAR_H = 72; // sync with your .topbar-spacer / nav height
+  const [floating, setFloating] = useState(false);
+  const [barH, setBarH] = useState(0);
+  const barRef = useRef<HTMLElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // measure bar height for placeholder to prevent layout jump
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (barRef.current) setBarH(barRef.current.offsetHeight);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (barRef.current) ro.observe(barRef.current);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
+  }, []);
 
   // --- fetch --------------------------------------------------------------
-
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setError("");
-      setLoading(true);
-      try {
-        const res = await fetch(`${API_BASE}/api/flights`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!cancelled) setFlights(Array.isArray(data) ? data : []);
-      } catch {
-        if (!cancelled) setError("Failed to load flights");
-      } finally {
-        if (!cancelled) setLoading(false);
+    const el = sentinelRef.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        // if sentinel is NOT fully in view (i.e. has crossed the sticky line) → float
+        setFloating(entry.isIntersecting === false);
+      },
+      {
+        // push the top boundary down by the nav height so we stick under it
+        root: null,
+        rootMargin: `-${TOPBAR_H + 12}px 0px 0px 0px`,
+        threshold: 1.0,
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
+    );
+
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   // --- helpers ------------------------------------------------------------
   // Always hide 'unavailable'
   const baseFlights = useMemo(() => {
-    return (flights || []).filter((f) => {
-      const s = String(f.status ?? "").toLowerCase();
+    return (flights || []).filter((f: Flight) => {
+      const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
       return s !== "unavailable";
     });
   }, [flights]);
 
-  const priceToNumber = (pCurrent, pNormal) => {
+  const priceToNumber = (pCurrent: unknown, pNormal: unknown) => {
     const val =
       typeof pCurrent === "number"
         ? pCurrent
         : typeof pNormal === "number"
         ? pNormal
         : NaN;
-    return Number.isFinite(val) ? val : Number.POSITIVE_INFINITY;
+    return Number.isFinite(val) ? (val as number) : Number.POSITIVE_INFINITY;
   };
 
   // Options for dropdowns (filtered to “currently possible”)
-  const departureOptions = useMemo(() => {
-    const m = new Map();
-    for (const f of baseFlights) {
+  const departureOptions = useMemo<Option[]>(() => {
+    const m = new Map<string, string>();
+    for (const f of baseFlights as Flight[]) {
       const code = (f.origin_iata || "").toUpperCase();
       if (!code) continue;
-      // keep only pairs that match selected destination/status (if any)
       if (to && (f.destination_iata || "").toUpperCase() !== to.toUpperCase())
         continue;
       if (status) {
@@ -96,14 +155,16 @@ export default function Home() {
       const name = f.origin_name || code;
       if (!m.has(code)) m.set(code, `${code} — ${name}`);
     }
-    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
+    const arr: Option[] = Array.from(m.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+    return arr.sort((a, b) => a.label.localeCompare(b.label));
   }, [baseFlights, status, to]);
 
-  const destinationOptions = useMemo(() => {
-    const m = new Map();
-    for (const f of baseFlights) {
+  const destinationOptions = useMemo<Option[]>(() => {
+    const m = new Map<string, string>();
+    for (const f of baseFlights as Flight[]) {
       const code = (f.destination_iata || "").toUpperCase();
       if (!code) continue;
       if (from && (f.origin_iata || "").toUpperCase() !== from.toUpperCase())
@@ -115,14 +176,16 @@ export default function Home() {
       const name = f.destination_name || code;
       if (!m.has(code)) m.set(code, `${code} — ${name}`);
     }
-    return Array.from(m, ([value, label]) => ({ value, label })).sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
+    const arr: Option[] = Array.from(m.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+    return arr.sort((a, b) => a.label.localeCompare(b.label));
   }, [baseFlights, status, from]);
 
-  const aircraftOptions = useMemo(() => {
-    const set = new Set();
-    for (const f of baseFlights) {
+  const aircraftOptions = useMemo<string[]>(() => {
+    const set = new Set<string>();
+    for (const f of baseFlights as Flight[]) {
       if (f.aircraft && String(f.aircraft).trim())
         set.add(String(f.aircraft).trim());
     }
@@ -152,30 +215,25 @@ export default function Home() {
 
   // --- filtering/sorting/paging ------------------------------------------
   const filtered = useMemo(() => {
-    return (baseFlights || []).filter((f) => {
-      // Hide past flights
+    return (baseFlights as Flight[]).filter((f: Flight) => {
       const depMs = f.departure_ts ? new Date(f.departure_ts).getTime() : 0;
       if (depMs && depMs < Date.now()) return false;
 
-      // Status
       if (status) {
         const s = String(f.status_latest ?? f.status ?? "").toLowerCase();
         if (s !== status.toLowerCase()) return false;
       }
 
-      // Departure/Destination by IATA
       if (from && (f.origin_iata || "").toUpperCase() !== from.toUpperCase())
         return false;
       if (to && (f.destination_iata || "").toUpperCase() !== to.toUpperCase())
         return false;
 
-      // Exact date
       if (date) {
         const depDate = (f.departure_ts || "").slice(0, 10);
         if (depDate !== date) return false;
       }
 
-      // Max price
       if (maxPrice) {
         const max = Number(maxPrice);
         if (!Number.isNaN(max)) {
@@ -184,17 +242,16 @@ export default function Home() {
         }
       }
 
-      // Aircraft
       if (aircraft && String(f.aircraft || "") !== aircraft) return false;
 
       return true;
     });
   }, [baseFlights, status, from, to, date, maxPrice, aircraft]);
 
-  const sorted = useMemo(() => {
-    const arr = [...filtered];
+  const sorted = useMemo<Flight[]>(() => {
+    const arr = [...(filtered as Flight[])];
     arr.sort((a, b) => {
-      let A, B;
+      let A: string | number, B: string | number;
       switch (sortKey) {
         case "price":
           A = priceToNumber(a.price_current, a.price_normal);
@@ -224,6 +281,7 @@ export default function Home() {
     const start = (currentPage - 1) * pageSize;
     return sorted.slice(start, start + pageSize);
   }, [sorted, currentPage]);
+
   useEffect(() => {
     setPage(1);
   }, [status, from, to, date, maxPrice, aircraft, sortKey, sortDir]);
@@ -231,33 +289,32 @@ export default function Home() {
   // --- render -------------------------------------------------------------
   return (
     <main className="screen">
-      <header className="topbar">
-        <div className="brand">
-          <span className="dot" />
-          <span className="logo">JetCheck</span>
-        </div>
-      </header>
-
       <section className="hero">
-        <h1>{tt("hero.title", "Exclusive Empty Legs in Real Time")}</h1>
+        <h1>{t("hero.title", "Exclusive Empty Legs in Real Time")}</h1>
         <p>
-          {tt(
-            "hero.subtitle",
-            "Find available empty legs with just one click."
-          )}
+          {t("hero.subtitle", "Find available empty legs with just one click.")}
         </p>
       </section>
 
-      {/* Controls Top Bar (Sort + Filter Button) */}
-      <section className="controls-bar">
-        <div className="controls-bar__inner">
+      {/* Sentinel just before the controls; when it scrolls past the top margin we float the bar */}
+      <div ref={sentinelRef} style={{ height: 1 }} />
+
+      {/* Placeholder to prevent layout jumps when the bar becomes fixed */}
+      {floating && <div style={{ height: barH }} />}
+
+      <section
+        ref={barRef as any}
+        className={`controls-bar ${floating ? "controls-bar--floating" : ""}`}
+        aria-label="Search controls"
+      >
+        <div className="controls-bar__shell">
           <button
             className="btn btn-filter"
             onClick={() => setShowFilters(true)}
             aria-expanded={showFilters ? "true" : "false"}
             aria-controls="filters-drawer"
           >
-            {tt("filters.button", "🔎 Filters")}{" "}
+            {t("filters.button", "🔎 Filters")}{" "}
             {activeFilters > 0 ? `(${activeFilters})` : ""}
           </button>
 
@@ -265,23 +322,25 @@ export default function Home() {
             <select
               className="select"
               value={sortKey}
-              onChange={(e) => setSortKey(e.target.value)}
-              aria-label={tt("sort.label", "Sort by")}
+              onChange={(e) =>
+                setSortKey(e.target.value as "departure" | "price" | "seen")
+              }
+              aria-label={t("sort.label", "Sort by")}
             >
               <option value="departure">
-                {tt("sort.departure", "Departure Time")}
+                {t("sort.departure", "Departure Time")}
               </option>
-              <option value="price">{tt("sort.price", "Price")}</option>
-              <option value="seen">{tt("sort.seen", "Last Seen")}</option>
+              <option value="price">{t("sort.price", "Price")}</option>
+              <option value="seen">{t("sort.seen", "Last Seen")}</option>
             </select>
             <select
               className="select"
               value={sortDir}
-              onChange={(e) => setSortDir(e.target.value)}
-              aria-label={tt("sort.direction", "Sort direction")}
+              onChange={(e) => setSortDir(e.target.value as "asc" | "desc")}
+              aria-label={t("sort.direction", "Sort direction")}
             >
-              <option value="asc">{tt("sort.asc", "Ascending")}</option>
-              <option value="desc">{tt("sort.desc", "Descending")}</option>
+              <option value="asc">{t("sort.asc", "Ascending")}</option>
+              <option value="desc">{t("sort.desc", "Descending")}</option>
             </select>
           </div>
         </div>
@@ -341,7 +400,7 @@ export default function Home() {
           <>
             {sorted.length === 0 ? (
               <div className="notice" role="status" aria-live="polite">
-                {tt(
+                {t(
                   "emptyState",
                   "No flights for the current filters. Try changing the date or increasing the max price."
                 )}
@@ -349,8 +408,8 @@ export default function Home() {
             ) : (
               <>
                 <div className="grid">
-                  {pageItems.map((f) => (
-                    <FlightCard key={f.id} flight={f} />
+                  {pageItems.map((f: Flight) => (
+                    <FlightCard key={String(f.id)} flight={f} />
                   ))}
                 </div>
 
@@ -360,18 +419,18 @@ export default function Home() {
                     disabled={currentPage <= 1}
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    ◀︎ {tt("pager.back", "Back")}
+                    ◀︎ {t("pager.back", "Back")}
                   </button>
                   <div className="pager__info">
-                    {tt("pager.page", "Page")} {currentPage} / {totalPages} ·{" "}
-                    {total} {tt("pager.results", "results")}
+                    {t("pager.page", "Page")} {currentPage} / {totalPages} ·{" "}
+                    {total} {t("pager.results", "results")}
                   </div>
                   <button
                     className="btn"
                     disabled={currentPage >= totalPages}
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
-                    {tt("pager.next", "Next")} ▶︎
+                    {t("pager.next", "Next")} ▶︎
                   </button>
                 </div>
               </>
@@ -379,18 +438,6 @@ export default function Home() {
           </>
         )}
       </section>
-
-      <footer className="footer">
-        <span>© {new Date().getFullYear()} JetCheck</span>
-        <span className="sep">•</span>
-        <a
-          href="https://jetcheck-eight.vercel.app"
-          target="_blank"
-          rel="noreferrer"
-        >
-          {tt("footer.live", "Live")}
-        </a>
-      </footer>
     </main>
   );
 }
