@@ -7,8 +7,12 @@
 html, body { height: 100%; }
 body {
   margin: 0;
-  color: var(--text);
-  background: var(--bg);
+  min-height: 100vh;
+  color: #f5f5f5;
+    background: linear-gradient(180deg, #0b0b0d 0%, #1a1a1f 100%);
+  background-attachment: fixed;   /* ensures fixed, parallax-like feel */
+  background-size: cover;
+  background-repeat: no-repeat;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     Inter, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
   -webkit-font-smoothing: antialiased;
